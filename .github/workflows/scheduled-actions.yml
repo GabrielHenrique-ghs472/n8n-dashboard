@@ -1,0 +1,43 @@
+name: Scheduled Dashboard Actions
+
+on:
+  schedule:
+    # 07:00 e 16:00 America/Sao_Paulo (UTC-3) em dias úteis
+    - cron: '0 10 * * 1-5'
+    - cron: '0 19 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  trigger-actions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger refresh and sync endpoints
+        env:
+          BASE_URL: https://n8n-error-dashboard.onrender.com
+        run: |
+          set -euo pipefail
+
+          post_endpoint() {
+            local endpoint="$1"
+            local url="${BASE_URL}${endpoint}"
+            local body_file
+            body_file=$(mktemp)
+
+            local status
+            status=$(curl -sS -m 180 -o "$body_file" -w "%{http_code}" -X POST "$url")
+            local body
+            body=$(cat "$body_file")
+            rm -f "$body_file"
+
+            echo "POST ${endpoint} -> HTTP ${status}"
+            echo "Response: ${body}"
+
+            # 200 = iniciado com sucesso | 409 = já estava rodando
+            if [ "$status" != "200" ] && [ "$status" != "409" ]; then
+              echo "Falha ao acionar ${endpoint}" >&2
+              exit 1
+            fi
+          }
+
+          post_endpoint "/api/refresh"
+          post_endpoint "/api/sync"

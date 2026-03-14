@@ -29,3 +29,19 @@ Acesse: `http://localhost:3456`
 
 - O plano Free pode entrar em sleep após inatividade.
 - `report.json` e `sync-result.json` são dados de runtime e não devem ir para o Git.
+
+## Agendamento automático (sem abrir o site)
+
+Este projeto usa GitHub Actions para disparar automaticamente:
+- `POST /api/refresh`
+- `POST /api/sync`
+
+Horários configurados:
+- 07:00 (America/Sao_Paulo), segunda a sexta
+- 16:00 (America/Sao_Paulo), segunda a sexta
+
+No cron UTC do GitHub isso equivale a:
+- `0 10 * * 1-5`
+- `0 19 * * 1-5`
+
+Arquivo: `.github/workflows/scheduled-actions.yml`
