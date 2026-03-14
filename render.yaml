@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: n8n-error-dashboard
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_SERVICE_KEY
+        sync: false
+      - key: CLICKUP_TOKEN
+        sync: false
+      - key: CLICKUP_LIST_ID
+        sync: false

@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.*
+!.env.example
+report.json
+sync-result.json
+logs/
+.DS_Store
+npm-debug.log*
+
+.claude/

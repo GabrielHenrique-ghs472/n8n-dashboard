@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>n8n Error Dashboard — Grupo Síntese Digital</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #000; color: #e8e8e8; }
+
+    /* Loading bar */
+    #loading-bar { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: #fff; transition: width 0.3s; z-index: 999; }
+
+    /* Header */
+    .header { background: #000; border-bottom: 1px solid #282828; padding: 14px 32px; display: flex; align-items: center; gap: 14px; }
+    .header h1 { font-size: 15px; font-weight: 500; letter-spacing: -0.2px; color: #fff; }
+    .header .sub { color: #555; font-size: 12px; margin-top: 1px; }
+    .header .spacer { flex: 1; }
+    .header .last-update { color: #555; font-size: 12px; margin-right: 4px; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 6px; border: 1px solid transparent; cursor: pointer; font-size: 13px; font-weight: 500; transition: all .15s; }
+    .btn-primary { background: #fff; color: #000; border-color: #fff; }
+    .btn-primary:hover { background: #e5e5e5; border-color: #e5e5e5; }
+    .btn-green { background: transparent; color: #666; border-color: #222; }
+    .btn-green:hover { color: #999; border-color: #333; }
+    .btn-primary:disabled { background: #111; color: #333; border-color: #1a1a1a; cursor: not-allowed; }
+    .btn-green:disabled { color: #2a2a2a; border-color: #1a1a1a; cursor: not-allowed; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin 1s linear infinite; }
+
+    /* Content */
+    .content { max-width: 1400px; margin: 0 auto; padding: 24px 32px; }
+
+    /* Summary */
+    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 24px; }
+    .card { background: #080808; border: 1px solid #282828; border-radius: 8px; padding: 16px 20px; }
+    .card .label { font-size: 11px; text-transform: uppercase; letter-spacing: .7px; color: #585858; margin-bottom: 10px; }
+    .card .value { font-size: 30px; font-weight: 600; line-height: 1; letter-spacing: -1px; }
+    .card.red    .value { color: #ff4444; }
+    .card.orange .value { color: #ff8c00; }
+    .card.blue   .value { color: #888; }
+    .card.green  .value { color: #888; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 2px; margin-bottom: 12px; }
+    .tab { padding: 6px 14px; border-radius: 6px; border: none; background: none; cursor: pointer; font-size: 13px; font-weight: 400; color: #585858; }
+    .tab.active { background: #181818; color: #e8e8e8; }
+    .tab:hover:not(.active) { color: #666; }
+
+    /* Search */
+    .search-input { width: 100%; padding: 8px 14px; border: 1px solid #282828; border-radius: 7px; font-size: 13px; outline: none; background: #080808; color: #e8e8e8; margin-bottom: 10px; }
+    .search-input::placeholder { color: #404040; }
+    .search-input:focus { border-color: #444; }
+
+    /* Table */
+    .table-wrap { background: #080808; border: 1px solid #282828; border-radius: 8px; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #000; padding: 9px 16px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .7px; color: #505050; border-bottom: 1px solid #282828; white-space: nowrap; font-weight: 500; }
+    td { padding: 11px 16px; border-bottom: 1px solid #141414; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #0f0f0f; }
+
+    /* Chips & tags */
+    .pill { display: inline-block; background: #1a0000; color: #ff4444; font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 20px; white-space: nowrap; border: 1px solid #2d0000; }
+    .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 5px; white-space: nowrap; }
+    .tag-client   { background: #0d0d0d; color: #aaa; border: 1px solid #282828; }
+    .tag-workflow { background: #0a0d0a; color: #3d6b3d; border: 1px solid #152015; }
+    .tag-node     { background: #0d0a00; color: #6b5a1a; border: 1px solid #1f1800; }
+    .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+
+    /* Error message */
+    .err-msg { font-family: 'SF Mono', 'Menlo', 'Consolas', monospace; font-size: 12px; color: #cc3333; background: #0d0000; padding: 4px 8px; border-radius: 5px; word-break: break-word; max-width: 380px; display: inline-block; border: 1px solid #1a0000; }
+    .err-msg.none { color: #2e2e2e; background: #080808; border-color: #111; }
+
+    /* Período do erro */
+    .period { font-size: 11px; color: #444; margin-top: 4px; white-space: nowrap; }
+    .period span { color: #606060; }
+
+    /* Exemplos com label do cliente */
+    .exemplos { display: flex; flex-direction: column; gap: 7px; min-width: 130px; }
+    .exemplo-item { display: flex; flex-direction: column; gap: 2px; }
+    .exemplo-cliente { font-size: 10px; color: #505050; text-transform: uppercase; letter-spacing: .5px; }
+    .exemplos a { font-size: 12px; color: #999; text-decoration: none; }
+    .exemplos a:hover { color: #ddd; }
+
+    /* Client accordion */
+    .client-list { display: grid; gap: 6px; }
+    .client-card { background: #080808; border: 1px solid #282828; border-radius: 8px; overflow: hidden; }
+    .client-header { display: flex; align-items: center; gap: 10px; padding: 12px 18px; cursor: pointer; user-select: none; }
+    .client-header:hover { background: #0f0f0f; }
+    .client-name { font-weight: 500; font-size: 14px; color: #e8e8e8; }
+    .client-meta { color: #555; font-size: 13px; }
+    .client-body { display: none; padding: 0 18px 14px; }
+    .client-body.open { display: block; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .dot.red   { background: #ff4444; }
+    .dot.green { background: #3d6b3d; }
+    .dot.gray  { background: #2e2e2e; }
+    .chevron { margin-left: auto; color: #484848; font-size: 11px; transition: transform .2s; }
+    .chevron.open { transform: rotate(180deg); }
+
+    /* Empty state */
+    .empty { text-align: center; padding: 60px 20px; color: #222; }
+    .empty .icon { font-size: 36px; margin-bottom: 10px; filter: grayscale(1) brightness(.4); }
+    .empty p { font-size: 13px; }
+
+    /* Error collect badge */
+    .err-collect { font-size: 12px; color: #664400; background: #0d0800; padding: 3px 8px; border-radius: 5px; border: 1px solid #1a1200; }
+
+    /* Modal */
+    .modal-inner { background: #0a0a0a; border: 1px solid #282828; border-radius: 12px; padding: 26px 28px; max-width: 540px; width: 90%; max-height: 80vh; overflow-y: auto; }
+    .modal-inner h2 { color: #e8e8e8; font-weight: 500; }
+    .modal-inner button { color: #555; }
+  </style>
+</head>
+<body>
+  <div id="loading-bar"></div>
+
+  <!-- Modal sync -->
+  <div id="sync-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:200; align-items:center; justify-content:center;">
+    <div class="modal-inner">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
+        <h2 style="font-size:16px; font-weight:600;">Resultado da Sincronização</h2>
+        <button onclick="document.getElementById('sync-modal').style.display='none'" style="background:none; border:none; cursor:pointer; font-size:20px;">✕</button>
+      </div>
+      <div id="sync-modal-body"></div>
+    </div>
+  </div>
+
+  <header class="header">
+    <div>
+      <h1>n8n Error Dashboard</h1>
+      <div class="sub" id="sub-header">Grupo Síntese Digital · Últimas 24h</div>
+    </div>
+    <div class="spacer"></div>
+    <span class="last-update" id="last-update"></span>
+    <button class="btn btn-green" id="btn-sync" onclick="triggerSync()">
+      <svg id="sync-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      Sincronizar Clientes
+    </button>
+    <button class="btn btn-primary" id="btn-refresh" onclick="triggerRefresh()">
+      <svg id="refresh-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+      Atualizar agora
+    </button>
+  </header>
+
+  <div class="content">
+    <div class="summary">
+      <div class="card red">   <div class="label">Total de Erros</div>   <div class="value" id="s-erros">—</div></div>
+      <div class="card orange"><div class="label">Clientes Afetados</div><div class="value" id="s-clientes">—</div></div>
+      <div class="card blue">  <div class="label">Workflows Afetados</div><div class="value" id="s-workflows">—</div></div>
+      <div class="card green"> <div class="label">Clientes sem Erro</div><div class="value" id="s-ok">—</div></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('tipo', this)">Por Tipo de Erro</button>
+      <button class="tab"        onclick="switchTab('cliente', this)">Por Cliente</button>
+      <button class="tab"        onclick="switchTab('todos', this)">Todos os Clientes</button>
+    </div>
+
+    <div id="view-tipo">
+      <input class="search-input" id="search-tipo" placeholder="Filtrar por mensagem, cliente ou workflow..." oninput="renderTipo()">
+      <div id="content-tipo"></div>
+    </div>
+
+    <div id="view-cliente" style="display:none">
+      <input class="search-input" id="search-cliente" placeholder="Filtrar por nome do cliente..." oninput="renderCliente()">
+      <div id="content-cliente"></div>
+    </div>
+
+    <div id="view-todos" style="display:none">
+      <input class="search-input" id="search-todos" placeholder="Filtrar por nome ou servidor..." oninput="renderTodos()">
+      <div id="content-todos"></div>
+    </div>
+  </div>
+
+  <script>
+    let report = null;
+    let pollTimer = null;
+
+    function esc(s) {
+      return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function setBar(pct) { document.getElementById('loading-bar').style.width = pct + '%'; }
+
+    function switchTab(tab, el) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+      document.getElementById('view-tipo').style.display    = tab === 'tipo'    ? '' : 'none';
+      document.getElementById('view-cliente').style.display = tab === 'cliente' ? '' : 'none';
+      document.getElementById('view-todos').style.display   = tab === 'todos'   ? '' : 'none';
+      if (tab === 'todos') loadClients();
+    }
+
+    // ── Carrega relatório ─────────────────────────────────────────────────────
+    async function loadReport() {
+      setBar(40);
+      try {
+        const res  = await fetch('/api/report');
+        const data = await res.json();
+        setBar(100);
+        setTimeout(() => setBar(0), 400);
+        if (data.error) { showEmpty('content-tipo', data.error); return; }
+        report = data;
+        renderAll();
+      } catch (e) {
+        setBar(0);
+        showEmpty('content-tipo', 'Falha ao carregar: ' + e.message);
+      }
+    }
+
+    function showEmpty(targetId, msg) {
+      document.getElementById(targetId).innerHTML =
+        `<div class="empty"><div class="icon">📭</div><p>${esc(msg)}</p></div>`;
+    }
+
+    function renderAll() {
+      if (!report) return;
+      const d = new Date(report.gerado_em);
+      document.getElementById('last-update').textContent = 'Atualizado: ' + d.toLocaleString('pt-BR');
+      const totalWf = report.clientes.reduce((a, c) => a + (c.workflows_afetados || 0), 0);
+      const semErro = report.clientes.filter(c => !c.erro_coleta && c.total_erros === 0).length;
+      document.getElementById('s-erros').textContent    = report.total_erros_geral ?? 0;
+      document.getElementById('s-clientes').textContent = report.clientes_com_erro  ?? 0;
+      document.getElementById('s-workflows').textContent = totalWf;
+      document.getElementById('s-ok').textContent       = semErro;
+
+      // Período global: menor primeiro_startedAt e maior ultimo_startedAt entre todos os erros
+      let globalPrimeiro = null, globalUltimo = null;
+      for (const c of report.clientes) {
+        for (const r of (c.resumo || [])) {
+          if (r.primeiro_startedAt && (!globalPrimeiro || r.primeiro_startedAt < globalPrimeiro)) globalPrimeiro = r.primeiro_startedAt;
+          if (r.ultimo_startedAt  && (!globalUltimo  || r.ultimo_startedAt  > globalUltimo))  globalUltimo  = r.ultimo_startedAt;
+        }
+      }
+      const sub = document.getElementById('sub-header');
+      if (globalPrimeiro && globalUltimo) {
+        sub.textContent = `Grupo Síntese Digital · ${fmtTs(globalPrimeiro)} → ${fmtTs(globalUltimo)}`;
+      } else {
+        sub.textContent = 'Grupo Síntese Digital · Últimas 24h';
+      }
+
+      renderTipo();
+      renderCliente();
+    }
+
+    // ── Agrupa erros por mensagem — exemplos agora carregam o cliente ─────────
+    function fmtTs(iso) {
+      if (!iso) return null;
+      const d = new Date(iso);
+      return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' +
+             d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function buildGroups() {
+      const groups = {};
+      for (const c of report.clientes) {
+        for (const r of (c.resumo || [])) {
+          const key = r.erro || '(sem mensagem de erro)';
+          if (!groups[key]) groups[key] = { erro: key, total: 0, clientes: new Set(), workflows: [], exemplos: [], primeiro: null, ultimo: null };
+          groups[key].total += r.ocorrencias;
+          groups[key].clientes.add(c.cliente);
+          groups[key].workflows.push({ cliente: c.cliente, nome: r.workflow_nome || r.workflow_id, node: r.node_falhou });
+          if (r.exemplos?.length) groups[key].exemplos.push({ cliente: c.cliente, url: r.exemplos[0] });
+          // Rastreia o intervalo de tempo do erro
+          if (r.primeiro_startedAt && (!groups[key].primeiro || r.primeiro_startedAt < groups[key].primeiro))
+            groups[key].primeiro = r.primeiro_startedAt;
+          if (r.ultimo_startedAt && (!groups[key].ultimo || r.ultimo_startedAt > groups[key].ultimo))
+            groups[key].ultimo = r.ultimo_startedAt;
+        }
+      }
+      return Object.values(groups)
+        .map(g => ({ ...g, clientes: [...g.clientes] }))
+        .sort((a, b) => b.total - a.total);
+    }
+
+    // ── Tab: Por tipo ─────────────────────────────────────────────────────────
+    function renderTipo() {
+      if (!report) return;
+      const q = document.getElementById('search-tipo').value.toLowerCase();
+      let groups = buildGroups();
+      if (q) {
+        groups = groups.filter(g =>
+          g.erro.toLowerCase().includes(q) ||
+          g.clientes.some(c => c.toLowerCase().includes(q)) ||
+          g.workflows.some(w => (w.nome || '').toLowerCase().includes(q))
+        );
+      }
+
+      const el = document.getElementById('content-tipo');
+      if (!groups.length) {
+        el.innerHTML = '<div class="empty"><div class="icon">✅</div><p>Nenhum erro encontrado no período!</p></div>';
+        return;
+      }
+
+      const rows = groups.map(g => {
+        const isNone = g.erro === '(sem mensagem de erro)';
+
+        // Workflows únicos por combinação nome+node
+        const wfsUniq = [...new Map(g.workflows.map(w => [w.nome + '|' + w.node, w])).values()];
+        const wfsHtml = wfsUniq.map(w =>
+          `<div style="margin-bottom:4px">
+            <span class="tag tag-workflow">${esc(w.nome)}</span>
+            ${w.node ? `<span class="tag tag-node" style="margin-left:3px">${esc(w.node)}</span>` : ''}
+          </div>`
+        ).join('');
+
+        // Exemplos com label do cliente — até 5, um por cliente
+        const exemplosUniq = [];
+        const clientesVistos = new Set();
+        for (const e of g.exemplos) {
+          if (!clientesVistos.has(e.cliente)) {
+            clientesVistos.add(e.cliente);
+            exemplosUniq.push(e);
+          }
+          if (exemplosUniq.length >= 5) break;
+        }
+        const linksHtml = exemplosUniq.map(e =>
+          `<div class="exemplo-item">
+            <span class="exemplo-cliente">${esc(e.cliente)}</span>
+            <a href="${esc(e.url)}" target="_blank">→ ver execução</a>
+          </div>`
+        ).join('');
+
+        return `<tr>
+          <td><span class="err-msg ${isNone ? 'none' : ''}">${esc(g.erro)}</span></td>
+          <td><span class="pill">${g.total}×</span></td>
+          <td><div class="tags">${g.clientes.map(c => `<span class="tag tag-client">${esc(c)}</span>`).join('')}</div></td>
+          <td>${wfsHtml}</td>
+          <td><div class="exemplos">${linksHtml || '—'}</div></td>
+        </tr>`;
+      }).join('');
+
+      el.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Mensagem de Erro</th>
+              <th>Ocorrências</th>
+              <th>Clientes</th>
+              <th>Workflow / Node</th>
+              <th>Exemplos</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
+
+    // ── Tab: Por cliente ──────────────────────────────────────────────────────
+    function renderCliente() {
+      if (!report) return;
+      const q = document.getElementById('search-cliente').value.toLowerCase();
+      let clientes = report.clientes
+        .filter(c => c.total_erros > 0 || c.erro_coleta)
+        .filter(c => !q || c.cliente.toLowerCase().includes(q));
+
+      const el = document.getElementById('content-cliente');
+      if (!clientes.length) {
+        el.innerHTML = '<div class="empty"><div class="icon">✅</div><p>Nenhum cliente com erros no período!</p></div>';
+        return;
+      }
+
+      const cards = clientes.map(c => {
+        const id = 'cc-' + c.cliente.replace(/\W+/g, '-');
+
+        if (c.erro_coleta) {
+          return `<div class="client-card">
+            <div class="client-header">
+              <span class="dot gray"></span>
+              <span class="client-name">${esc(c.cliente)}</span>
+              <span class="err-collect">${esc(c.erro_coleta)}</span>
+            </div>
+          </div>`;
+        }
+
+        const rows = (c.resumo || []).map(r => {
+          return `<tr>
+          <td><span class="tag tag-workflow">${esc(r.workflow_nome || r.workflow_id)}</span></td>
+          <td>${r.node_falhou ? `<span class="tag tag-node">${esc(r.node_falhou)}</span>` : '<span style="color:#334155">—</span>'}</td>
+          <td><span class="err-msg ${!r.erro ? 'none' : ''}">${esc(r.erro || '(sem mensagem)')}</span></td>
+          <td><span class="pill">${r.ocorrencias}×</span></td>
+          <td><div class="exemplos">${(r.exemplos || []).slice(0, 3).map(l => `<a href="${esc(l)}" target="_blank">→ ver</a>`).join('')}</div></td>
+        </tr>`;
+        }).join('');
+
+        return `<div class="client-card">
+          <div class="client-header" onclick="toggleCard('${id}')">
+            <span class="dot red"></span>
+            <span class="client-name">${esc(c.cliente)}</span>
+            <span class="client-meta">${c.total_erros} erro${c.total_erros !== 1 ? 's' : ''} · ${c.workflows_afetados} workflow${c.workflows_afetados !== 1 ? 's' : ''}</span>
+            <span class="chevron" id="chv-${id}">▼</span>
+          </div>
+          <div class="client-body" id="${id}">
+            <table>
+              <thead><tr><th>Workflow</th><th>Node</th><th>Erro</th><th>Qtd</th><th>Links</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>`;
+      }).join('');
+
+      el.innerHTML = `<div class="client-list">${cards}</div>`;
+    }
+
+    function toggleCard(id) {
+      const body = document.getElementById(id);
+      const chv  = document.getElementById('chv-' + id);
+      if (!body) return;
+      body.classList.toggle('open');
+      if (chv) chv.classList.toggle('open');
+    }
+
+    // ── Atualização manual ────────────────────────────────────────────────────
+    async function triggerRefresh() {
+      const btn  = document.getElementById('btn-refresh');
+      const icon = document.getElementById('refresh-icon');
+      btn.disabled = true;
+      icon.classList.add('spin');
+      try {
+        await fetch('/api/refresh', { method: 'POST' });
+        pollTimer = setInterval(async () => {
+          try {
+            const s = await (await fetch('/api/status')).json();
+            if (!s.refreshing) {
+              clearInterval(pollTimer);
+              btn.disabled = false;
+              icon.classList.remove('spin');
+              await loadReport();
+            }
+          } catch {}
+        }, 2000);
+      } catch (e) {
+        btn.disabled = false;
+        icon.classList.remove('spin');
+        alert('Erro ao iniciar atualização: ' + e.message);
+      }
+    }
+
+    // ── Sincronizar Clientes ──────────────────────────────────────────────────
+    let syncPollTimer = null;
+
+    async function triggerSync() {
+      const btn  = document.getElementById('btn-sync');
+      const icon = document.getElementById('sync-icon');
+      btn.disabled = true;
+      icon.classList.add('spin');
+      try {
+        await fetch('/api/sync', { method: 'POST' });
+        syncPollTimer = setInterval(async () => {
+          try {
+            const s = await (await fetch('/api/status')).json();
+            if (!s.syncing) {
+              clearInterval(syncPollTimer);
+              btn.disabled = false;
+              icon.classList.remove('spin');
+              await mostrarResultadoSync();
+            }
+          } catch {}
+        }, 1500);
+      } catch (e) {
+        btn.disabled = false;
+        icon.classList.remove('spin');
+        alert('Erro ao iniciar sincronização: ' + e.message);
+      }
+    }
+
+    async function mostrarResultadoSync() {
+      try {
+        const res  = await fetch('/api/sync-result');
+        const data = await res.json();
+        const body = document.getElementById('sync-modal-body');
+        if (data.erro) {
+          body.innerHTML = `<p style="color:#f87171">Erro: ${esc(data.erro)}</p>`;
+        } else if (data.mensagem) {
+          body.innerHTML = `<p style="color:#4ade80; font-weight:600">✅ ${esc(data.mensagem)}</p>`;
+        } else {
+          let html = '';
+          if (data.adicionados?.length) {
+            html += `<p style="color:#4ade80; font-weight:600; margin-bottom:10px">✅ ${data.adicionados.length} cliente(s) adicionado(s):</p>`;
+            html += '<ul style="margin-left:16px; margin-bottom:16px">';
+            for (const a of data.adicionados) html += `<li style="font-size:13px; margin-bottom:4px; color:#e2e8f0"><b>${esc(a.username)}</b> <span style="color:#475569">— ${esc(a.n8n_url)}</span></li>`;
+            html += '</ul>';
+          }
+          if (data.precisam_api_key?.length) {
+            html += `<p style="color:#fb923c; font-weight:600; margin-bottom:10px">⚠️ ${data.precisam_api_key.length} cliente(s) em servidor novo — precisam de api_key manual:</p>`;
+            html += '<ul style="margin-left:16px">';
+            for (const p of data.precisam_api_key) {
+              html += `<li style="font-size:13px; margin-bottom:4px; color:#e2e8f0"><b>${esc(p.username)}</b> <span style="color:#475569">— ${esc(p.n8n_url)}</span>`;
+              if (p.erro) html += ` <span style="color:#f87171">(${esc(p.erro)})</span>`;
+              html += '</li>';
+            }
+            html += '</ul>';
+          }
+          if (!html) html = '<p style="color:#4ade80">✅ Tudo sincronizado. Nenhum cliente novo.</p>';
+          body.innerHTML = html;
+        }
+        document.getElementById('sync-modal').style.display = 'flex';
+      } catch (e) {
+        alert('Erro ao buscar resultado: ' + e.message);
+      }
+    }
+
+    // ── Todos os Clientes ─────────────────────────────────────────────────────
+    let allClients = null;
+
+    async function loadClients() {
+      if (allClients) { renderTodos(); return; }
+      const el = document.getElementById('content-todos');
+      el.innerHTML = '<div class="empty"><p>Carregando...</p></div>';
+      try {
+        const res  = await fetch('/api/clients');
+        allClients = await res.json();
+        if (allClients.error) { el.innerHTML = `<div class="empty"><p>${esc(allClients.error)}</p></div>`; return; }
+        renderTodos();
+      } catch (e) {
+        el.innerHTML = `<div class="empty"><p>Erro: ${esc(e.message)}</p></div>`;
+      }
+    }
+
+    function renderTodos() {
+      if (!allClients) return;
+      const q = document.getElementById('search-todos').value.toLowerCase();
+      const lista = allClients.filter(c =>
+        !q || c.nome.toLowerCase().includes(q) || (c.n8n_url || '').toLowerCase().includes(q)
+      );
+      const el = document.getElementById('content-todos');
+      if (!lista.length) {
+        el.innerHTML = '<div class="empty"><div class="icon">🔍</div><p>Nenhum cliente encontrado.</p></div>';
+        return;
+      }
+
+      const rows = lista.map((c, i) => {
+        let host = c.n8n_url || '—';
+        try { host = new URL(c.n8n_url).hostname; } catch {}
+        const autoSintese = c.AutoSintese
+          ? `<span style="font-size:11px; padding:2px 7px; border-radius:4px; background:#0a0d0a; color:#3d8c3d; border:1px solid #152015;">AutoSintese</span>`
+          : `<span style="font-size:11px; padding:2px 7px; border-radius:4px; background:#0d0d0d; color:#555; border:1px solid #1e1e1e;">Legado</span>`;
+        const ativo = c.ativo
+          ? `<span style="font-size:11px; padding:2px 7px; border-radius:4px; background:#060d06; color:#3d6b3d; border:1px solid #0f1f0f;">Ativo</span>`
+          : `<span style="font-size:11px; padding:2px 7px; border-radius:4px; background:#0d0600; color:#6b3d1a; border:1px solid #1f1000;">Inativo</span>`;
+        const criado = c.created_at
+          ? new Date(c.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+          : '—';
+        return `<tr>
+          <td style="color:#585858; font-size:12px; width:40px">${i + 1}</td>
+          <td style="font-weight:500">${esc(c.nome)}</td>
+          <td style="color:#555; font-size:12px; font-family:monospace">${esc(host)}</td>
+          <td>${autoSintese}</td>
+          <td>${ativo}</td>
+          <td style="color:#404040; font-size:12px">${criado}</td>
+        </tr>`;
+      }).join('');
+
+      el.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>#</th>
+              <th>Nome</th>
+              <th>Servidor</th>
+              <th>Plataforma</th>
+              <th>Status</th>
+              <th>Criado em</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────────────
+    loadReport();
+  </script>
+</body>
+</html>

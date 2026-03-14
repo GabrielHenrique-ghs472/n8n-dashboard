@@ -1,0 +1,15 @@
+{
+  "name": "n8n-dashboard",
+  "version": "1.0.0",
+  "description": "Dashboard de erros n8n — Grupo Síntese Digital",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "fetch": "node fetch-errors.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.99.0",
+    "dotenv": "^17.3.1",
+    "pm2": "^6.0.14"
+  }
+}
