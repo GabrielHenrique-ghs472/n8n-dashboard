@@ -27,8 +27,15 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .spin { animation: spin 1s linear infinite; }
 
-    /* Content */
-    .content { max-width: 1400px; margin: 0 auto; padding: 24px 32px; }
+    /* Layout */
+    .app-shell { display: flex; min-height: calc(100vh - 61px); }
+    .sidebar { width: 230px; border-right: 1px solid #1d1d1d; background: #050505; padding: 18px 12px; }
+    .main-area { flex: 1; min-width: 0; }
+    .content { max-width: 1500px; margin: 0 auto; padding: 24px 32px; }
+    .side-title { font-size: 10px; color: #4a4a4a; text-transform: uppercase; letter-spacing: .9px; margin: 4px 10px 10px; }
+    .side-tab { width: 100%; border: 1px solid #1f1f1f; background: #090909; color: #696969; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; text-align: left; font-size: 13px; cursor: pointer; }
+    .side-tab:hover { color: #a0a0a0; border-color: #2c2c2c; }
+    .side-tab.active { color: #f0f0f0; border-color: #3f3f3f; background: #121212; }
 
     /* Summary */
     .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 24px; }
@@ -110,6 +117,19 @@
     .modal-inner { background: #0a0a0a; border: 1px solid #282828; border-radius: 12px; padding: 26px 28px; max-width: 540px; width: 90%; max-height: 80vh; overflow-y: auto; }
     .modal-inner h2 { color: #e8e8e8; font-weight: 500; }
     .modal-inner button { color: #555; }
+
+    .card .hint { margin-top: 8px; color: #4d4d4d; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .server-list { display: flex; flex-wrap: wrap; gap: 4px; }
+    .server-pill { font-size: 11px; color: #8e8e8e; background: #0c0c0c; border: 1px solid #252525; padding: 2px 6px; border-radius: 999px; }
+
+    @media (max-width: 980px) {
+      .app-shell { flex-direction: column; min-height: auto; }
+      .sidebar { width: 100%; border-right: none; border-bottom: 1px solid #1d1d1d; display: flex; align-items: center; gap: 8px; overflow-x: auto; padding: 12px; }
+      .side-title { margin: 0 6px 0 2px; white-space: nowrap; }
+      .side-tab { width: auto; min-width: 170px; margin: 0; }
+      .content { padding: 16px; }
+      .header { padding: 12px 16px; }
+    }
   </style>
 </head>
 <body>
@@ -143,44 +163,101 @@
     </button>
   </header>
 
-  <div class="content">
-    <div class="summary">
-      <div class="card red">   <div class="label">Total de Erros</div>   <div class="value" id="s-erros">—</div></div>
-      <div class="card orange"><div class="label">Clientes Afetados</div><div class="value" id="s-clientes">—</div></div>
-      <div class="card blue">  <div class="label">Workflows Afetados</div><div class="value" id="s-workflows">—</div></div>
-      <div class="card green"> <div class="label">Clientes sem Erro</div><div class="value" id="s-ok">—</div></div>
-    </div>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="side-title">Navegação</div>
+      <button class="side-tab active" id="menu-infra" onclick="switchMainSection('infra', this)">Infra / Servidores</button>
+      <button class="side-tab" id="menu-erros" onclick="switchMainSection('erros', this)">Erros n8n</button>
+    </aside>
 
-    <div class="tabs">
-      <button class="tab active" onclick="switchTab('tipo', this)">Por Tipo de Erro</button>
-      <button class="tab"        onclick="switchTab('cliente', this)">Por Cliente</button>
-      <button class="tab"        onclick="switchTab('todos', this)">Todos os Clientes</button>
-    </div>
+    <main class="main-area">
+      <section class="content" id="section-infra">
+        <div class="summary">
+          <div class="card orange">
+            <div class="label">Clientes Ativos</div>
+            <div class="value" id="infra-clientes-ativos">—</div>
+          </div>
+          <div class="card blue">
+            <div class="label">Servidores Ativos</div>
+            <div class="value" id="infra-servidores-ativos">—</div>
+          </div>
+          <div class="card green">
+            <div class="label">Média por Servidor</div>
+            <div class="value" id="infra-media-servidor">—</div>
+          </div>
+          <div class="card red">
+            <div class="label">Maior Servidor</div>
+            <div class="value" id="infra-maior-servidor">—</div>
+            <div class="hint" id="infra-maior-servidor-host">—</div>
+          </div>
+        </div>
 
-    <div id="view-tipo">
-      <input class="search-input" id="search-tipo" placeholder="Filtrar por mensagem, cliente ou workflow..." oninput="renderTipo()">
-      <div id="content-tipo"></div>
-    </div>
+        <input class="search-input" id="search-infra-servidor" placeholder="Filtrar servidor..." oninput="renderInfraServers()">
+        <div id="content-infra-servidores"></div>
 
-    <div id="view-cliente" style="display:none">
-      <input class="search-input" id="search-cliente" placeholder="Filtrar por nome do cliente..." oninput="renderCliente()">
-      <div id="content-cliente"></div>
-    </div>
+        <input class="search-input" id="search-infra-cliente" placeholder="Filtrar cliente ativo por nome ou servidor..." oninput="renderInfraClients()" style="margin-top:16px;">
+        <div id="content-infra-clientes"></div>
+      </section>
 
-    <div id="view-todos" style="display:none">
-      <input class="search-input" id="search-todos" placeholder="Filtrar por nome ou servidor..." oninput="renderTodos()">
-      <div id="content-todos"></div>
-    </div>
+      <section class="content" id="section-erros" style="display:none">
+        <div class="summary">
+          <div class="card red">   <div class="label">Total de Erros</div>   <div class="value" id="s-erros">—</div></div>
+          <div class="card orange"><div class="label">Clientes Afetados</div><div class="value" id="s-clientes">—</div></div>
+          <div class="card blue">  <div class="label">Workflows Afetados</div><div class="value" id="s-workflows">—</div></div>
+          <div class="card green"> <div class="label">Clientes sem Erro</div><div class="value" id="s-ok">—</div></div>
+        </div>
+
+        <div class="tabs">
+          <button class="tab active" onclick="switchTab('tipo', this)">Por Tipo de Erro</button>
+          <button class="tab"        onclick="switchTab('cliente', this)">Por Cliente</button>
+          <button class="tab"        onclick="switchTab('todos', this)">Todos os Clientes</button>
+        </div>
+
+        <div id="view-tipo">
+          <input class="search-input" id="search-tipo" placeholder="Filtrar por mensagem, cliente ou workflow..." oninput="renderTipo()">
+          <div id="content-tipo"></div>
+        </div>
+
+        <div id="view-cliente" style="display:none">
+          <input class="search-input" id="search-cliente" placeholder="Filtrar por nome do cliente..." oninput="renderCliente()">
+          <div id="content-cliente"></div>
+        </div>
+
+        <div id="view-todos" style="display:none">
+          <input class="search-input" id="search-todos" placeholder="Filtrar por nome ou servidor..." oninput="renderTodos()">
+          <div id="content-todos"></div>
+        </div>
+      </section>
+    </main>
   </div>
 
   <script>
     let report = null;
+    let allClients = null;
     let pollTimer = null;
+    let currentMainSection = 'infra';
+    let errorSubHeader = 'Grupo Síntese Digital · Últimas 24h';
 
     function esc(s) {
       return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
     function setBar(pct) { document.getElementById('loading-bar').style.width = pct + '%'; }
+
+    function switchMainSection(section, el) {
+      currentMainSection = section;
+      document.querySelectorAll('.side-tab').forEach(t => t.classList.remove('active'));
+      if (el) el.classList.add('active');
+
+      document.getElementById('section-infra').style.display = section === 'infra' ? '' : 'none';
+      document.getElementById('section-erros').style.display = section === 'erros' ? '' : 'none';
+
+      if (section === 'infra') {
+        document.getElementById('sub-header').textContent = 'Grupo Síntese Digital · Infraestrutura de clientes ativos';
+        loadClients();
+      } else {
+        document.getElementById('sub-header').textContent = errorSubHeader;
+      }
+    }
 
     function switchTab(tab, el) {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -232,12 +309,12 @@
           if (r.ultimo_startedAt  && (!globalUltimo  || r.ultimo_startedAt  > globalUltimo))  globalUltimo  = r.ultimo_startedAt;
         }
       }
-      const sub = document.getElementById('sub-header');
       if (globalPrimeiro && globalUltimo) {
-        sub.textContent = `Grupo Síntese Digital · ${fmtTs(globalPrimeiro)} → ${fmtTs(globalUltimo)}`;
+        errorSubHeader = `Grupo Síntese Digital · ${fmtTs(globalPrimeiro)} → ${fmtTs(globalUltimo)}`;
       } else {
-        sub.textContent = 'Grupo Síntese Digital · Últimas 24h';
+        errorSubHeader = 'Grupo Síntese Digital · Últimas 24h';
       }
+      if (currentMainSection === 'erros') document.getElementById('sub-header').textContent = errorSubHeader;
 
       renderTipo();
       renderCliente();
@@ -499,20 +576,131 @@
       }
     }
 
+    function extractHost(url) {
+      if (!url) return '(sem servidor)';
+      try { return new URL(url).hostname; } catch { return url; }
+    }
+
+    function getActiveClients() {
+      return (allClients || []).filter(c => c.ativo);
+    }
+
+    function getInfraServers() {
+      const servers = {};
+      for (const c of getActiveClients()) {
+        const host = extractHost(c.n8n_url);
+        if (!servers[host]) servers[host] = { host, url: c.n8n_url || null, clients: [] };
+        servers[host].clients.push(c);
+      }
+      return Object.values(servers).sort((a, b) => b.clients.length - a.clients.length || a.host.localeCompare(b.host));
+    }
+
+    function renderInfra() {
+      const active = getActiveClients();
+      const servers = getInfraServers();
+      document.getElementById('infra-clientes-ativos').textContent = active.length;
+      document.getElementById('infra-servidores-ativos').textContent = servers.length;
+      document.getElementById('infra-media-servidor').textContent = servers.length ? (active.length / servers.length).toFixed(1) : '0';
+
+      const biggest = servers[0];
+      document.getElementById('infra-maior-servidor').textContent = biggest ? biggest.clients.length : '0';
+      document.getElementById('infra-maior-servidor-host').textContent = biggest ? biggest.host : '—';
+
+      renderInfraServers();
+      renderInfraClients();
+    }
+
+    function renderInfraServers() {
+      const q = (document.getElementById('search-infra-servidor').value || '').toLowerCase();
+      const list = getInfraServers().filter(s =>
+        !q || s.host.toLowerCase().includes(q) || (s.url || '').toLowerCase().includes(q)
+      );
+      const el = document.getElementById('content-infra-servidores');
+      if (!list.length) {
+        el.innerHTML = '<div class="empty"><div class="icon">🔍</div><p>Nenhum servidor encontrado.</p></div>';
+        return;
+      }
+
+      const rows = list.map((s, i) => {
+        const clients = s.clients.map(c => `<span class="server-pill">${esc(c.nome)}</span>`).join('');
+        const serverCell = s.url
+          ? `<a href="${esc(s.url)}" target="_blank" style="color:#9ca3af; text-decoration:none; font-family:monospace">${esc(s.host)}</a>`
+          : `<span style="color:#9ca3af; font-family:monospace">${esc(s.host)}</span>`;
+        return `<tr>
+          <td style="color:#585858; font-size:12px; width:40px">${i + 1}</td>
+          <td>${serverCell}</td>
+          <td><span class="pill">${s.clients.length}</span></td>
+          <td><div class="server-list">${clients}</div></td>
+        </tr>`;
+      }).join('');
+
+      el.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Servidor</th><th>Clientes Ativos</th><th>Clientes</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
+
+    function renderInfraClients() {
+      const q = (document.getElementById('search-infra-cliente').value || '').toLowerCase();
+      const active = getActiveClients().filter(c => {
+        const host = extractHost(c.n8n_url).toLowerCase();
+        return !q || c.nome.toLowerCase().includes(q) || host.includes(q) || (c.n8n_url || '').toLowerCase().includes(q);
+      });
+      const el = document.getElementById('content-infra-clientes');
+      if (!active.length) {
+        el.innerHTML = '<div class="empty"><div class="icon">🔍</div><p>Nenhum cliente ativo encontrado.</p></div>';
+        return;
+      }
+
+      const rows = active.map((c, i) => {
+        const host = extractHost(c.n8n_url);
+        const platform = c.AutoSintese
+          ? `<span style="font-size:11px; padding:2px 7px; border-radius:4px; background:#0a0d0a; color:#3d8c3d; border:1px solid #152015;">AutoSintese</span>`
+          : `<span style="font-size:11px; padding:2px 7px; border-radius:4px; background:#0d0d0d; color:#555; border:1px solid #1e1e1e;">Legado</span>`;
+        const link = c.n8n_url
+          ? `<a href="${esc(c.n8n_url)}" target="_blank" style="color:#9ca3af; text-decoration:none; font-family:monospace">${esc(host)}</a>`
+          : `<span style="color:#555">—</span>`;
+        return `<tr>
+          <td style="color:#585858; font-size:12px; width:40px">${i + 1}</td>
+          <td style="font-weight:500">${esc(c.nome)}</td>
+          <td>${link}</td>
+          <td>${platform}</td>
+        </tr>`;
+      }).join('');
+
+      el.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Cliente Ativo</th><th>Servidor n8n</th><th>Plataforma</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
+
     // ── Todos os Clientes ─────────────────────────────────────────────────────
-    let allClients = null;
 
     async function loadClients() {
-      if (allClients) { renderTodos(); return; }
+      if (allClients) { renderInfra(); renderTodos(); return; }
       const el = document.getElementById('content-todos');
       el.innerHTML = '<div class="empty"><p>Carregando...</p></div>';
       try {
         const res  = await fetch('/api/clients');
         allClients = await res.json();
-        if (allClients.error) { el.innerHTML = `<div class="empty"><p>${esc(allClients.error)}</p></div>`; return; }
+        if (allClients.error) {
+          el.innerHTML = `<div class="empty"><p>${esc(allClients.error)}</p></div>`;
+          document.getElementById('content-infra-servidores').innerHTML = `<div class="empty"><p>${esc(allClients.error)}</p></div>`;
+          document.getElementById('content-infra-clientes').innerHTML = `<div class="empty"><p>${esc(allClients.error)}</p></div>`;
+          return;
+        }
+        renderInfra();
         renderTodos();
       } catch (e) {
         el.innerHTML = `<div class="empty"><p>Erro: ${esc(e.message)}</p></div>`;
+        document.getElementById('content-infra-servidores').innerHTML = `<div class="empty"><p>Erro: ${esc(e.message)}</p></div>`;
+        document.getElementById('content-infra-clientes').innerHTML = `<div class="empty"><p>Erro: ${esc(e.message)}</p></div>`;
       }
     }
 
@@ -568,6 +756,8 @@
 
     // ── Init ──────────────────────────────────────────────────────────────────
     loadReport();
+    loadClients();
+    switchMainSection('infra', document.getElementById('menu-infra'));
   </script>
 </body>
 </html>
