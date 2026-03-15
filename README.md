@@ -1,4 +1,4 @@
-# n8n Error Dashboard
+# Infraestrutura - Grupo Sintese
 
 Deploy recomendado: Render (plano Free).
 

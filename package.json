@@ -1,7 +1,7 @@
 {
   "name": "n8n-dashboard",
   "version": "1.0.0",
-  "description": "Dashboard de erros n8n — Grupo Síntese Digital",
+  "description": "Infraestrutura - Grupo Sintese",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

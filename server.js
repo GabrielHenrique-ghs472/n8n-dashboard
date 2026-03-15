@@ -187,5 +187,5 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`n8n Error Dashboard rodando em http://localhost:${PORT}`);
+  console.log(`Infraestrutura - Grupo Sintese rodando em http://localhost:${PORT}`);
 });
