@@ -18,6 +18,27 @@ const HTML_FILE = path.join(__dirname, 'index.html');
 let refreshing = false;
 let syncing = false;
 
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let raw = '';
+    req.on('data', chunk => {
+      raw += chunk;
+      if (raw.length > 1_000_000) {
+        reject(new Error('Payload muito grande'));
+      }
+    });
+    req.on('end', () => {
+      if (!raw.trim()) return resolve({});
+      try {
+        resolve(JSON.parse(raw));
+      } catch {
+        reject(new Error('JSON inválido'));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://localhost`);
 
@@ -120,6 +141,43 @@ const server = http.createServer((req, res) => {
         }
         res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
         res.end(JSON.stringify(data));
+      });
+    return;
+  }
+
+  // Atualiza flags de manutenção do cliente
+  if (req.method === 'PATCH' && /^\/api\/clients\/[^/]+$/.test(url.pathname)) {
+    const clientId = decodeURIComponent(url.pathname.split('/').pop());
+    readJsonBody(req)
+      .then(async body => {
+        const updates = {};
+        if (Object.prototype.hasOwnProperty.call(body, 'AutoSintese')) updates.AutoSintese = !!body.AutoSintese;
+        if (Object.prototype.hasOwnProperty.call(body, 'servidor_proprio')) updates.servidor_proprio = !!body.servidor_proprio;
+        if (Object.prototype.hasOwnProperty.call(body, 'churn')) updates.churn = !!body.churn;
+
+        if (!Object.keys(updates).length) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: 'Nenhum campo válido para atualizar.' }));
+        }
+
+        const { data, error } = await supabase
+          .from('mcp_clientes')
+          .update(updates)
+          .eq('id', clientId)
+          .select('id, nome, n8n_url, AutoSintese, ativo, servidor_proprio, churn, created_at')
+          .single();
+
+        if (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: error.message }));
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(data));
+      })
+      .catch(err => {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
       });
     return;
   }

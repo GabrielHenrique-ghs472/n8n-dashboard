@@ -176,6 +176,7 @@
       <button class="side-tab active" id="menu-estrutura" onclick="switchMainSection('estrutura', this)">Estrutura de clientes</button>
       <button class="side-tab" id="menu-hosting" onclick="switchMainSection('hosting', this)">Infra de servidores</button>
       <button class="side-tab" id="menu-erros" onclick="switchMainSection('erros', this)">Erros n8n</button>
+      <button class="side-tab" id="menu-manutencao" onclick="switchMainSection('manutencao', this)">Manutenção de clientes</button>
     </aside>
 
     <main class="main-area">
@@ -251,7 +252,6 @@
         <div class="tabs">
           <button class="tab active" onclick="switchTab('tipo', this)">Por Tipo de Erro</button>
           <button class="tab"        onclick="switchTab('cliente', this)">Por Cliente</button>
-          <button class="tab"        onclick="switchTab('todos', this)">Todos os Clientes</button>
         </div>
 
         <div id="view-tipo">
@@ -264,10 +264,11 @@
           <div id="content-cliente"></div>
         </div>
 
-        <div id="view-todos" style="display:none">
-          <input class="search-input" id="search-todos" placeholder="Filtrar por nome ou servidor..." oninput="renderTodos()">
-          <div id="content-todos"></div>
-        </div>
+      </section>
+
+      <section class="content" id="section-manutencao" style="display:none">
+        <input class="search-input" id="search-manutencao" placeholder="Filtrar cliente por nome ou servidor..." oninput="renderManutencao()">
+        <div id="content-manutencao"></div>
       </section>
     </main>
   </div>
@@ -294,12 +295,16 @@
       document.getElementById('section-estrutura').style.display = section === 'estrutura' ? '' : 'none';
       document.getElementById('section-hosting').style.display = section === 'hosting' ? '' : 'none';
       document.getElementById('section-erros').style.display = section === 'erros' ? '' : 'none';
+      document.getElementById('section-manutencao').style.display = section === 'manutencao' ? '' : 'none';
 
       if (section === 'estrutura') {
         document.getElementById('sub-header').textContent = 'Grupo Síntese Digital · Estrutura de clientes ativos';
         loadClients();
       } else if (section === 'hosting') {
         document.getElementById('sub-header').textContent = 'Grupo Síntese Digital · Infra de servidores (até 3 clientes por servidor)';
+        loadClients();
+      } else if (section === 'manutencao') {
+        document.getElementById('sub-header').textContent = 'Grupo Síntese Digital · Manutenção de clientes';
         loadClients();
       } else {
         document.getElementById('sub-header').textContent = errorSubHeader;
@@ -311,8 +316,6 @@
       el.classList.add('active');
       document.getElementById('view-tipo').style.display    = tab === 'tipo'    ? '' : 'none';
       document.getElementById('view-cliente').style.display = tab === 'cliente' ? '' : 'none';
-      document.getElementById('view-todos').style.display   = tab === 'todos'   ? '' : 'none';
-      if (tab === 'todos') loadClients();
     }
 
     // ── Carrega relatório ─────────────────────────────────────────────────────
@@ -782,8 +785,8 @@
     // ── Todos os Clientes ─────────────────────────────────────────────────────
 
     async function loadClients() {
-      if (allClients) { renderInfra(); renderHostingInfra(); renderTodos(); return; }
-      const el = document.getElementById('content-todos');
+      if (allClients) { renderInfra(); renderHostingInfra(); renderManutencao(); return; }
+      const el = document.getElementById('content-manutencao');
       el.innerHTML = '<div class="empty"><p>Carregando...</p></div>';
       try {
         const res  = await fetch('/api/clients');
@@ -796,7 +799,7 @@
         }
         renderInfra();
         renderHostingInfra();
-        renderTodos();
+        renderManutencao();
       } catch (e) {
         el.innerHTML = `<div class="empty"><p>Erro: ${esc(e.message)}</p></div>`;
         document.getElementById('content-infra-servidores').innerHTML = `<div class="empty"><p>Erro: ${esc(e.message)}</p></div>`;
@@ -804,37 +807,36 @@
       }
     }
 
-    function renderTodos() {
+    function renderManutencao() {
       if (!allClients) return;
-      const q = document.getElementById('search-todos').value.toLowerCase();
+      const q = document.getElementById('search-manutencao').value.toLowerCase();
       const lista = allClients.filter(c =>
         !q || c.nome.toLowerCase().includes(q) || (c.n8n_url || '').toLowerCase().includes(q)
       );
-      const el = document.getElementById('content-todos');
+      const el = document.getElementById('content-manutencao');
       if (!lista.length) {
         el.innerHTML = '<div class="empty"><div class="icon">🔍</div><p>Nenhum cliente encontrado.</p></div>';
         return;
       }
 
+      function checkboxId(clientId, key) {
+        return `m-${key}-${String(clientId).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+      }
+
       const rows = lista.map((c, i) => {
         let host = c.n8n_url || '—';
         try { host = new URL(c.n8n_url).hostname; } catch {}
-        const autoSintese = c.AutoSintese
-          ? `<span style="font-size:11px; padding:2px 7px; border-radius:4px; background:#0a0d0a; color:#3d8c3d; border:1px solid #152015;">AutoSintese</span>`
-          : `<span style="font-size:11px; padding:2px 7px; border-radius:4px; background:#0d0d0d; color:#555; border:1px solid #1e1e1e;">Legado</span>`;
-        const ativo = c.ativo
-          ? `<span style="font-size:11px; padding:2px 7px; border-radius:4px; background:#060d06; color:#3d6b3d; border:1px solid #0f1f0f;">Ativo</span>`
-          : `<span style="font-size:11px; padding:2px 7px; border-radius:4px; background:#0d0600; color:#6b3d1a; border:1px solid #1f1000;">Inativo</span>`;
-        const criado = c.created_at
-          ? new Date(c.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
-          : '—';
+        const idAuto = checkboxId(c.id, 'auto');
+        const idServer = checkboxId(c.id, 'server');
+        const idChurn = checkboxId(c.id, 'churn');
         return `<tr>
           <td style="color:#585858; font-size:12px; width:40px">${i + 1}</td>
           <td style="font-weight:500">${esc(c.nome)}</td>
           <td style="color:#555; font-size:12px; font-family:monospace">${esc(host)}</td>
-          <td>${autoSintese}</td>
-          <td>${ativo}</td>
-          <td style="color:#404040; font-size:12px">${criado}</td>
+          <td><input type="checkbox" id="${idAuto}" ${c.AutoSintese ? 'checked' : ''}></td>
+          <td><input type="checkbox" id="${idServer}" ${c.servidor_proprio ? 'checked' : ''}></td>
+          <td><input type="checkbox" id="${idChurn}" ${c.churn ? 'checked' : ''}></td>
+          <td><button class="btn btn-green" style="padding:4px 10px; font-size:12px;" onclick="salvarCliente('${esc(c.id)}')">Salvar</button></td>
         </tr>`;
       }).join('');
 
@@ -843,15 +845,45 @@
           <table>
             <thead><tr>
               <th>#</th>
-              <th>Nome</th>
+              <th>Cliente</th>
               <th>Servidor</th>
-              <th>Plataforma</th>
-              <th>Status</th>
-              <th>Criado em</th>
+              <th>AutoSintese</th>
+              <th>Servidor Próprio</th>
+              <th>Churn</th>
+              <th>Ação</th>
             </tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>`;
+    }
+
+    async function salvarCliente(clientId) {
+      const key = String(clientId).replace(/[^a-zA-Z0-9_-]/g, '_');
+      const auto = document.getElementById(`m-auto-${key}`)?.checked || false;
+      const server = document.getElementById(`m-server-${key}`)?.checked || false;
+      const churn = document.getElementById(`m-churn-${key}`)?.checked || false;
+
+      try {
+        const res = await fetch(`/api/clients/${encodeURIComponent(clientId)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            AutoSintese: auto,
+            servidor_proprio: server,
+            churn,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Falha ao salvar');
+
+        const idx = allClients.findIndex(c => String(c.id) === String(clientId));
+        if (idx >= 0) allClients[idx] = data;
+        renderInfra();
+        renderHostingInfra();
+        renderManutencao();
+      } catch (e) {
+        alert('Erro ao salvar cliente: ' + e.message);
+      }
     }
 
     // ── Init ──────────────────────────────────────────────────────────────────
