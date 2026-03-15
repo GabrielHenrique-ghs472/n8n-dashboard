@@ -124,7 +124,10 @@
     .filters-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
     .toggle-line { display: inline-flex; align-items: center; gap: 8px; color: #7a7a7a; font-size: 12px; user-select: none; white-space: nowrap; }
     .toggle-line input { accent-color: #e5e7eb; }
-    .cliente-name-cell { font-weight: 400; color: #e8e8e8; }
+    .cliente-name-cell { font-family: inherit; font-size: 13px; font-weight: 500; color: #e8e8e8; }
+    .sortable-th { cursor: pointer; user-select: none; }
+    .sortable-th:hover { color: #8a8a8a; }
+    .sort-indicator { margin-left: 6px; color: #666; font-size: 10px; }
     .toggle-wrap { display: inline-flex; align-items: center; justify-content: center; }
     .switch {
       position: relative;
@@ -334,6 +337,7 @@
     let includeChurnHosting = false;
     const maintenanceSaveTimers = {};
     const maintenanceSaveState = {};
+    const maintenanceSort = { key: null, direction: 'active_first' };
 
     function esc(s) {
       return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -887,6 +891,23 @@
       const lista = allClients.filter(c =>
         !q || c.nome.toLowerCase().includes(q) || (c.n8n_url || '').toLowerCase().includes(q)
       );
+
+      const sortableKeys = ['AutoSintese', 'servidor_proprio', 'churn'];
+      if (sortableKeys.includes(maintenanceSort.key)) {
+        const key = maintenanceSort.key;
+        const direction = maintenanceSort.direction;
+        lista.sort((a, b) => {
+          const aOn = !!a[key];
+          const bOn = !!b[key];
+          if (aOn !== bOn) {
+            return direction === 'active_first'
+              ? (aOn ? -1 : 1)
+              : (aOn ? 1 : -1);
+          }
+          return String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR');
+        });
+      }
+
       const el = document.getElementById('content-manutencao');
       if (!lista.length) {
         el.innerHTML = '<div class="empty"><div class="icon">🔍</div><p>Nenhum cliente encontrado.</p></div>';
@@ -930,6 +951,13 @@
         </tr>`;
       }).join('');
 
+      function thLabel(label, key) {
+        if (maintenanceSort.key !== key) return `${label}<span class="sort-indicator">↕</span>`;
+        return maintenanceSort.direction === 'active_first'
+          ? `${label}<span class="sort-indicator">↑</span>`
+          : `${label}<span class="sort-indicator">↓</span>`;
+      }
+
       el.innerHTML = `
         <div class="table-wrap">
           <table>
@@ -937,13 +965,25 @@
               <th>#</th>
               <th>Cliente</th>
               <th>Servidor</th>
-              <th>AutoSintese</th>
-              <th>Servidor Próprio</th>
-              <th>Churn</th>
+              <th class="sortable-th" onclick="toggleMaintenanceSort('AutoSintese')">${thLabel('AutoSintese', 'AutoSintese')}</th>
+              <th class="sortable-th" onclick="toggleMaintenanceSort('servidor_proprio')">${thLabel('Servidor Próprio', 'servidor_proprio')}</th>
+              <th class="sortable-th" onclick="toggleMaintenanceSort('churn')">${thLabel('Churn', 'churn')}</th>
             </tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>`;
+    }
+
+    function toggleMaintenanceSort(key) {
+      if (maintenanceSort.key === key) {
+        maintenanceSort.direction = maintenanceSort.direction === 'active_first'
+          ? 'inactive_first'
+          : 'active_first';
+      } else {
+        maintenanceSort.key = key;
+        maintenanceSort.direction = 'active_first';
+      }
+      renderManutencao();
     }
 
     function setSaveState(clientId, state) {
