@@ -124,6 +124,17 @@
     .filters-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
     .toggle-line { display: inline-flex; align-items: center; gap: 8px; color: #7a7a7a; font-size: 12px; user-select: none; white-space: nowrap; }
     .toggle-line input { accent-color: #e5e7eb; }
+    .value-input {
+      width: 110px;
+      padding: 5px 8px;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      background: #0a0a0a;
+      color: #e8e8e8;
+      font-size: 12px;
+      outline: none;
+    }
+    .value-input:focus { border-color: #4b4b4b; }
     .cliente-name-cell { font-family: inherit; font-size: 13px; font-weight: 500; color: #e8e8e8; }
     .sortable-th { cursor: pointer; user-select: none; }
     .sortable-th:hover { color: #8a8a8a; }
@@ -253,12 +264,24 @@
             <div class="value" id="infra-maior-servidor">—</div>
             <div class="hint" id="infra-maior-servidor-host">—</div>
           </div>
+          <div class="card blue">
+            <div class="label">Custo Total / Mês</div>
+            <div class="value" id="infra-custo-total">—</div>
+          </div>
+          <div class="card green">
+            <div class="label">Custo por Cliente</div>
+            <div class="value" id="infra-custo-cliente">—</div>
+          </div>
         </div>
 
         <div class="filters-line">
           <label class="toggle-line">
             <input type="checkbox" id="toggle-estrutura-churn" onchange="toggleEstruturaChurn(this.checked)">
             Incluir clientes churn
+          </label>
+          <label class="toggle-line">
+            Valor por servidor (R$)
+            <input class="value-input" id="infra-server-cost" type="number" min="0" step="0.01" value="90" oninput="onInfraCostInput(this.value)">
           </label>
         </div>
         <input class="search-input" id="search-infra-servidor" placeholder="Filtrar por servidor ou cliente..." oninput="renderInfraServers()">
@@ -338,11 +361,27 @@
     const maintenanceSaveTimers = {};
     const maintenanceSaveState = {};
     const maintenanceSort = { key: null, direction: 'active_first' };
+    const INFRA_COST_STORAGE_KEY = 'infra_server_monthly_cost';
+    let infraServerMonthlyCost = loadInfraServerMonthlyCost();
 
     function esc(s) {
       return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
     function setBar(pct) { document.getElementById('loading-bar').style.width = pct + '%'; }
+    function formatBRL(v) { return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+
+    function loadInfraServerMonthlyCost() {
+      const raw = localStorage.getItem(INFRA_COST_STORAGE_KEY);
+      const parsed = Number(raw);
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : 90;
+    }
+
+    function onInfraCostInput(value) {
+      const parsed = Number(value);
+      infraServerMonthlyCost = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+      localStorage.setItem(INFRA_COST_STORAGE_KEY, String(infraServerMonthlyCost));
+      renderInfra();
+    }
 
     function switchMainSection(section, el) {
       currentMainSection = section;
@@ -723,9 +762,13 @@
     function renderInfra() {
       const active = getActiveClients();
       const servers = getInfraServers();
+      const totalCost = servers.length * infraServerMonthlyCost;
+      const costPerClient = active.length ? totalCost / active.length : 0;
       document.getElementById('infra-clientes-ativos').textContent = active.length;
       document.getElementById('infra-servidores-ativos').textContent = servers.length;
       document.getElementById('infra-media-servidor').textContent = servers.length ? (active.length / servers.length).toFixed(1) : '0';
+      document.getElementById('infra-custo-total').textContent = formatBRL(totalCost);
+      document.getElementById('infra-custo-cliente').textContent = formatBRL(costPerClient);
 
       const biggest = servers[0];
       document.getElementById('infra-maior-servidor').textContent = biggest ? biggest.clients.length : '0';
@@ -1043,6 +1086,8 @@
     loadReport();
     loadClients();
     switchMainSection('estrutura', document.getElementById('menu-estrutura'));
+    const infraCostInput = document.getElementById('infra-server-cost');
+    if (infraCostInput) infraCostInput.value = String(infraServerMonthlyCost);
   </script>
 </body>
 </html>
