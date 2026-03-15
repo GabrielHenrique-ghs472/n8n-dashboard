@@ -121,6 +121,10 @@
     .card .hint { margin-top: 8px; color: #4d4d4d; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .server-list { display: flex; flex-wrap: wrap; gap: 4px; }
     .server-pill { font-size: 11px; color: #8e8e8e; background: #0c0c0c; border: 1px solid #252525; padding: 2px 6px; border-radius: 999px; }
+    .capacity-badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid transparent; }
+    .capacity-ok { color: #4ade80; background: #071208; border-color: #15331a; }
+    .capacity-attention { color: #fbbf24; background: #120d04; border-color: #3a2c12; }
+    .capacity-full { color: #f87171; background: #140707; border-color: #3f1717; }
 
     @media (max-width: 980px) {
       .app-shell { flex-direction: column; min-height: auto; }
@@ -166,12 +170,13 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="side-title">Navegação</div>
-      <button class="side-tab active" id="menu-infra" onclick="switchMainSection('infra', this)">Infra / Servidores</button>
+      <button class="side-tab active" id="menu-estrutura" onclick="switchMainSection('estrutura', this)">Estrutura de clientes</button>
+      <button class="side-tab" id="menu-hosting" onclick="switchMainSection('hosting', this)">Infra de servidores</button>
       <button class="side-tab" id="menu-erros" onclick="switchMainSection('erros', this)">Erros n8n</button>
     </aside>
 
     <main class="main-area">
-      <section class="content" id="section-infra">
+      <section class="content" id="section-estrutura">
         <div class="summary">
           <div class="card orange">
             <div class="label">Clientes Ativos</div>
@@ -194,6 +199,30 @@
 
         <input class="search-input" id="search-infra-servidor" placeholder="Filtrar por servidor ou cliente..." oninput="renderInfraServers()">
         <div id="content-infra-servidores"></div>
+      </section>
+
+      <section class="content" id="section-hosting" style="display:none">
+        <div class="summary">
+          <div class="card orange">
+            <div class="label">Clientes Hospedados</div>
+            <div class="value" id="hosting-clientes">—</div>
+          </div>
+          <div class="card blue">
+            <div class="label">Servidores Utilizados</div>
+            <div class="value" id="hosting-servidores">—</div>
+          </div>
+          <div class="card green">
+            <div class="label">Vagas Livres (Total)</div>
+            <div class="value" id="hosting-vagas">—</div>
+          </div>
+          <div class="card red">
+            <div class="label">Servidores Lotados</div>
+            <div class="value" id="hosting-lotados">—</div>
+          </div>
+        </div>
+
+        <input class="search-input" id="search-hosting" placeholder="Filtrar por servidor ou cliente..." oninput="renderHostingServers()">
+        <div id="content-hosting-servidores"></div>
       </section>
 
       <section class="content" id="section-erros" style="display:none">
@@ -232,7 +261,7 @@
     let report = null;
     let allClients = null;
     let pollTimer = null;
-    let currentMainSection = 'infra';
+    let currentMainSection = 'estrutura';
     let errorSubHeader = 'Grupo Síntese Digital · Últimas 24h';
 
     function esc(s) {
@@ -245,11 +274,15 @@
       document.querySelectorAll('.side-tab').forEach(t => t.classList.remove('active'));
       if (el) el.classList.add('active');
 
-      document.getElementById('section-infra').style.display = section === 'infra' ? '' : 'none';
+      document.getElementById('section-estrutura').style.display = section === 'estrutura' ? '' : 'none';
+      document.getElementById('section-hosting').style.display = section === 'hosting' ? '' : 'none';
       document.getElementById('section-erros').style.display = section === 'erros' ? '' : 'none';
 
-      if (section === 'infra') {
-        document.getElementById('sub-header').textContent = 'Grupo Síntese Digital · Infraestrutura de clientes ativos';
+      if (section === 'estrutura') {
+        document.getElementById('sub-header').textContent = 'Grupo Síntese Digital · Estrutura de clientes ativos';
+        loadClients();
+      } else if (section === 'hosting') {
+        document.getElementById('sub-header').textContent = 'Grupo Síntese Digital · Infra de servidores (até 3 clientes por servidor)';
         loadClients();
       } else {
         document.getElementById('sub-header').textContent = errorSubHeader;
@@ -592,6 +625,20 @@
       return Object.values(servers).sort((a, b) => b.clients.length - a.clients.length || a.host.localeCompare(b.host));
     }
 
+    function getHostingClients() {
+      return (allClients || []).filter(c => c.ativo && c.servidor_proprio === false);
+    }
+
+    function getHostingServers() {
+      const servers = {};
+      for (const c of getHostingClients()) {
+        const host = extractHost(c.n8n_url);
+        if (!servers[host]) servers[host] = { host, url: c.n8n_url || null, clients: [] };
+        servers[host].clients.push(c);
+      }
+      return Object.values(servers).sort((a, b) => b.clients.length - a.clients.length || a.host.localeCompare(b.host));
+    }
+
     function renderInfra() {
       const active = getActiveClients();
       const servers = getInfraServers();
@@ -604,6 +651,18 @@
       document.getElementById('infra-maior-servidor-host').textContent = biggest ? biggest.host : '—';
 
       renderInfraServers();
+    }
+
+    function renderHostingInfra() {
+      const clients = getHostingClients();
+      const servers = getHostingServers();
+      const totalVagas = servers.reduce((acc, s) => acc + Math.max(0, 3 - s.clients.length), 0);
+      const lotados = servers.filter(s => s.clients.length >= 3).length;
+      document.getElementById('hosting-clientes').textContent = clients.length;
+      document.getElementById('hosting-servidores').textContent = servers.length;
+      document.getElementById('hosting-vagas').textContent = totalVagas;
+      document.getElementById('hosting-lotados').textContent = lotados;
+      renderHostingServers();
     }
 
     function renderInfraServers() {
@@ -642,10 +701,56 @@
         </div>`;
     }
 
+    function renderHostingServers() {
+      const q = (document.getElementById('search-hosting').value || '').toLowerCase();
+      const list = getHostingServers().filter(s =>
+        !q ||
+        s.host.toLowerCase().includes(q) ||
+        (s.url || '').toLowerCase().includes(q) ||
+        s.clients.some(c => c.nome.toLowerCase().includes(q))
+      );
+      const el = document.getElementById('content-hosting-servidores');
+      if (!list.length) {
+        el.innerHTML = '<div class="empty"><div class="icon">🔍</div><p>Nenhum servidor interno encontrado.</p></div>';
+        return;
+      }
+
+      const rows = list.map((s, i) => {
+        const count = s.clients.length;
+        const vagas = Math.max(0, 3 - count);
+        const status = count >= 3
+          ? '<span class="capacity-badge capacity-full">Lotado</span>'
+          : count === 2
+            ? '<span class="capacity-badge capacity-attention">Atenção</span>'
+            : '<span class="capacity-badge capacity-ok">Com espaço</span>';
+        const clients = s.clients.map(c => `<span class="server-pill">${esc(c.nome)}</span>`).join('');
+        const serverCell = s.url
+          ? `<a href="${esc(s.url)}" target="_blank" style="color:#9ca3af; text-decoration:none; font-family:monospace">${esc(s.host)}</a>`
+          : `<span style="color:#9ca3af; font-family:monospace">${esc(s.host)}</span>`;
+
+        return `<tr>
+          <td style="color:#585858; font-size:12px; width:40px">${i + 1}</td>
+          <td>${serverCell}</td>
+          <td><span class="pill">${count}</span></td>
+          <td style="color:#9ca3af">${vagas}</td>
+          <td>${status}</td>
+          <td><div class="server-list">${clients}</div></td>
+        </tr>`;
+      }).join('');
+
+      el.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Servidor</th><th>Clientes</th><th>Vagas Livres</th><th>Status</th><th>Clientes Hospedados</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
+
     // ── Todos os Clientes ─────────────────────────────────────────────────────
 
     async function loadClients() {
-      if (allClients) { renderInfra(); renderTodos(); return; }
+      if (allClients) { renderInfra(); renderHostingInfra(); renderTodos(); return; }
       const el = document.getElementById('content-todos');
       el.innerHTML = '<div class="empty"><p>Carregando...</p></div>';
       try {
@@ -654,13 +759,16 @@
         if (allClients.error) {
           el.innerHTML = `<div class="empty"><p>${esc(allClients.error)}</p></div>`;
           document.getElementById('content-infra-servidores').innerHTML = `<div class="empty"><p>${esc(allClients.error)}</p></div>`;
+          document.getElementById('content-hosting-servidores').innerHTML = `<div class="empty"><p>${esc(allClients.error)}</p></div>`;
           return;
         }
         renderInfra();
+        renderHostingInfra();
         renderTodos();
       } catch (e) {
         el.innerHTML = `<div class="empty"><p>Erro: ${esc(e.message)}</p></div>`;
         document.getElementById('content-infra-servidores').innerHTML = `<div class="empty"><p>Erro: ${esc(e.message)}</p></div>`;
+        document.getElementById('content-hosting-servidores').innerHTML = `<div class="empty"><p>Erro: ${esc(e.message)}</p></div>`;
       }
     }
 
@@ -717,7 +825,7 @@
     // ── Init ──────────────────────────────────────────────────────────────────
     loadReport();
     loadClients();
-    switchMainSection('infra', document.getElementById('menu-infra'));
+    switchMainSection('estrutura', document.getElementById('menu-estrutura'));
   </script>
 </body>
 </html>

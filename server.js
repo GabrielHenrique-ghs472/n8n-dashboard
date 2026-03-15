@@ -111,7 +111,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/clients') {
     supabase
       .from('mcp_clientes')
-      .select('id, nome, n8n_url, AutoSintese, ativo, created_at')
+      .select('id, nome, n8n_url, AutoSintese, ativo, servidor_proprio, created_at')
       .order('created_at', { ascending: true })
       .then(({ data, error }) => {
         if (error) {
