@@ -730,12 +730,19 @@
 
     function renderHostingServers() {
       const q = (document.getElementById('search-hosting').value || '').toLowerCase();
-      const list = getHostingServers().filter(s =>
-        !q ||
-        s.host.toLowerCase().includes(q) ||
-        (s.url || '').toLowerCase().includes(q) ||
-        s.clients.some(c => c.nome.toLowerCase().includes(q))
-      );
+      const list = getHostingServers()
+        .filter(s =>
+          !q ||
+          s.host.toLowerCase().includes(q) ||
+          (s.url || '').toLowerCase().includes(q) ||
+          s.clients.some(c => c.nome.toLowerCase().includes(q))
+        )
+        .sort((a, b) => {
+          const aLotado = a.clients.length >= 3;
+          const bLotado = b.clients.length >= 3;
+          if (aLotado !== bLotado) return aLotado ? 1 : -1; // Disponiveis primeiro
+          return b.clients.length - a.clients.length || a.host.localeCompare(b.host);
+        });
       const el = document.getElementById('content-hosting-servidores');
       if (!list.length) {
         el.innerHTML = '<div class="empty"><div class="icon">🔍</div><p>Nenhum servidor interno encontrado.</p></div>';
@@ -747,9 +754,7 @@
         const vagas = Math.max(0, 3 - count);
         const status = count >= 3
           ? '<span class="capacity-badge capacity-full">Lotado</span>'
-          : count === 2
-            ? '<span class="capacity-badge capacity-attention">Atenção</span>'
-            : '<span class="capacity-badge capacity-ok">Com espaço</span>';
+          : '<span class="capacity-badge capacity-ok">Disponivel</span>';
         const clients = s.clients.map(c => `<span class="server-pill">${esc(c.nome)}</span>`).join('');
         const serverCell = s.url
           ? `<a href="${esc(s.url)}" target="_blank" style="color:#9ca3af; text-decoration:none; font-family:monospace">${esc(s.host)}</a>`
