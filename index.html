@@ -121,6 +121,9 @@
     .card .hint { margin-top: 8px; color: #4d4d4d; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .server-list { display: flex; flex-wrap: wrap; gap: 4px; }
     .server-pill { font-size: 11px; color: #8e8e8e; background: #0c0c0c; border: 1px solid #252525; padding: 2px 6px; border-radius: 999px; }
+    .filters-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+    .toggle-line { display: inline-flex; align-items: center; gap: 8px; color: #7a7a7a; font-size: 12px; user-select: none; white-space: nowrap; }
+    .toggle-line input { accent-color: #e5e7eb; }
     .capacity-badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid transparent; }
     .capacity-ok { color: #4ade80; background: #071208; border-color: #15331a; }
     .capacity-attention { color: #fbbf24; background: #120d04; border-color: #3a2c12; }
@@ -197,6 +200,12 @@
           </div>
         </div>
 
+        <div class="filters-line">
+          <label class="toggle-line">
+            <input type="checkbox" id="toggle-estrutura-churn" onchange="toggleEstruturaChurn(this.checked)">
+            Incluir clientes churn
+          </label>
+        </div>
         <input class="search-input" id="search-infra-servidor" placeholder="Filtrar por servidor ou cliente..." oninput="renderInfraServers()">
         <div id="content-infra-servidores"></div>
       </section>
@@ -221,6 +230,12 @@
           </div>
         </div>
 
+        <div class="filters-line">
+          <label class="toggle-line">
+            <input type="checkbox" id="toggle-hosting-churn" onchange="toggleHostingChurn(this.checked)">
+            Incluir clientes churn
+          </label>
+        </div>
         <input class="search-input" id="search-hosting" placeholder="Filtrar por servidor ou cliente..." oninput="renderHostingServers()">
         <div id="content-hosting-servidores"></div>
       </section>
@@ -263,6 +278,8 @@
     let pollTimer = null;
     let currentMainSection = 'estrutura';
     let errorSubHeader = 'Grupo Síntese Digital · Últimas 24h';
+    let includeChurnEstrutura = false;
+    let includeChurnHosting = false;
 
     function esc(s) {
       return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -611,13 +628,13 @@
       try { return new URL(url).hostname; } catch { return url; }
     }
 
-    function getActiveClients() {
-      return (allClients || []).filter(c => c.ativo);
+    function getActiveClients(includeChurn = false) {
+      return (allClients || []).filter(c => c.ativo && (includeChurn || c.churn !== true));
     }
 
     function getInfraServers() {
       const servers = {};
-      for (const c of getActiveClients()) {
+      for (const c of getActiveClients(includeChurnEstrutura)) {
         const host = extractHost(c.n8n_url);
         if (!servers[host]) servers[host] = { host, url: c.n8n_url || null, clients: [] };
         servers[host].clients.push(c);
@@ -626,7 +643,7 @@
     }
 
     function getHostingClients() {
-      return (allClients || []).filter(c => c.ativo && c.servidor_proprio === false);
+      return (allClients || []).filter(c => c.ativo && c.servidor_proprio === false && (includeChurnHosting || c.churn !== true));
     }
 
     function getHostingServers() {
@@ -663,6 +680,16 @@
       document.getElementById('hosting-vagas').textContent = totalVagas;
       document.getElementById('hosting-lotados').textContent = lotados;
       renderHostingServers();
+    }
+
+    function toggleEstruturaChurn(checked) {
+      includeChurnEstrutura = checked;
+      renderInfra();
+    }
+
+    function toggleHostingChurn(checked) {
+      includeChurnHosting = checked;
+      renderHostingInfra();
     }
 
     function renderInfraServers() {
