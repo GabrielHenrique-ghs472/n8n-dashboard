@@ -632,7 +632,7 @@
     }
 
     function getActiveClients(includeChurn = false) {
-      return (allClients || []).filter(c => c.ativo && (includeChurn || c.churn !== true));
+      return (allClients || []).filter(c => includeChurn || c.churn !== true);
     }
 
     function getInfraServers() {
@@ -646,7 +646,7 @@
     }
 
     function getHostingClients() {
-      return (allClients || []).filter(c => c.ativo && c.servidor_proprio === false && (includeChurnHosting || c.churn !== true));
+      return (allClients || []).filter(c => c.servidor_proprio === false && (includeChurnHosting || c.churn !== true));
     }
 
     function getHostingServers() {

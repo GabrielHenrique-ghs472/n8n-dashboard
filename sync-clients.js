@@ -66,7 +66,7 @@ async function sincronizarClientes() {
         n8n_url: n8nUrl,
         api_key: apiKeyConhecida,
         AutoSintese: true,
-        ativo: true,
+        churn: false,
       });
       if (error) {
         precisamApiKey.push({ username: u.username, n8n_url: n8nUrl, erro: error.message });

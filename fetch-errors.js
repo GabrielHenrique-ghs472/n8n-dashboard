@@ -243,7 +243,7 @@ async function main() {
   const { data: clientes, error } = await supabase
     .from('mcp_clientes')
     .select('*')
-    .eq('ativo', true);
+    .or('churn.is.null,churn.eq.false');
 
   if (error) throw new Error(`Supabase: ${error.message}`);
 
