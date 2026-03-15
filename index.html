@@ -192,11 +192,8 @@
           </div>
         </div>
 
-        <input class="search-input" id="search-infra-servidor" placeholder="Filtrar servidor..." oninput="renderInfraServers()">
+        <input class="search-input" id="search-infra-servidor" placeholder="Filtrar por servidor ou cliente..." oninput="renderInfraServers()">
         <div id="content-infra-servidores"></div>
-
-        <input class="search-input" id="search-infra-cliente" placeholder="Filtrar cliente ativo por nome ou servidor..." oninput="renderInfraClients()" style="margin-top:16px;">
-        <div id="content-infra-clientes"></div>
       </section>
 
       <section class="content" id="section-erros" style="display:none">
@@ -607,17 +604,19 @@
       document.getElementById('infra-maior-servidor-host').textContent = biggest ? biggest.host : '—';
 
       renderInfraServers();
-      renderInfraClients();
     }
 
     function renderInfraServers() {
       const q = (document.getElementById('search-infra-servidor').value || '').toLowerCase();
       const list = getInfraServers().filter(s =>
-        !q || s.host.toLowerCase().includes(q) || (s.url || '').toLowerCase().includes(q)
+        !q ||
+        s.host.toLowerCase().includes(q) ||
+        (s.url || '').toLowerCase().includes(q) ||
+        s.clients.some(c => c.nome.toLowerCase().includes(q))
       );
       const el = document.getElementById('content-infra-servidores');
       if (!list.length) {
-        el.innerHTML = '<div class="empty"><div class="icon">🔍</div><p>Nenhum servidor encontrado.</p></div>';
+        el.innerHTML = '<div class="empty"><div class="icon">🔍</div><p>Nenhum servidor ou cliente encontrado.</p></div>';
         return;
       }
 
@@ -643,43 +642,6 @@
         </div>`;
     }
 
-    function renderInfraClients() {
-      const q = (document.getElementById('search-infra-cliente').value || '').toLowerCase();
-      const active = getActiveClients().filter(c => {
-        const host = extractHost(c.n8n_url).toLowerCase();
-        return !q || c.nome.toLowerCase().includes(q) || host.includes(q) || (c.n8n_url || '').toLowerCase().includes(q);
-      });
-      const el = document.getElementById('content-infra-clientes');
-      if (!active.length) {
-        el.innerHTML = '<div class="empty"><div class="icon">🔍</div><p>Nenhum cliente ativo encontrado.</p></div>';
-        return;
-      }
-
-      const rows = active.map((c, i) => {
-        const host = extractHost(c.n8n_url);
-        const platform = c.AutoSintese
-          ? `<span style="font-size:11px; padding:2px 7px; border-radius:4px; background:#0a0d0a; color:#3d8c3d; border:1px solid #152015;">AutoSintese</span>`
-          : `<span style="font-size:11px; padding:2px 7px; border-radius:4px; background:#0d0d0d; color:#555; border:1px solid #1e1e1e;">Legado</span>`;
-        const link = c.n8n_url
-          ? `<a href="${esc(c.n8n_url)}" target="_blank" style="color:#9ca3af; text-decoration:none; font-family:monospace">${esc(host)}</a>`
-          : `<span style="color:#555">—</span>`;
-        return `<tr>
-          <td style="color:#585858; font-size:12px; width:40px">${i + 1}</td>
-          <td style="font-weight:500">${esc(c.nome)}</td>
-          <td>${link}</td>
-          <td>${platform}</td>
-        </tr>`;
-      }).join('');
-
-      el.innerHTML = `
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>#</th><th>Cliente Ativo</th><th>Servidor n8n</th><th>Plataforma</th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>`;
-    }
-
     // ── Todos os Clientes ─────────────────────────────────────────────────────
 
     async function loadClients() {
@@ -692,7 +654,6 @@
         if (allClients.error) {
           el.innerHTML = `<div class="empty"><p>${esc(allClients.error)}</p></div>`;
           document.getElementById('content-infra-servidores').innerHTML = `<div class="empty"><p>${esc(allClients.error)}</p></div>`;
-          document.getElementById('content-infra-clientes').innerHTML = `<div class="empty"><p>${esc(allClients.error)}</p></div>`;
           return;
         }
         renderInfra();
@@ -700,7 +661,6 @@
       } catch (e) {
         el.innerHTML = `<div class="empty"><p>Erro: ${esc(e.message)}</p></div>`;
         document.getElementById('content-infra-servidores').innerHTML = `<div class="empty"><p>Erro: ${esc(e.message)}</p></div>`;
-        document.getElementById('content-infra-clientes').innerHTML = `<div class="empty"><p>Erro: ${esc(e.message)}</p></div>`;
       }
     }
 
