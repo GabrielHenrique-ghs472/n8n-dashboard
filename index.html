@@ -264,24 +264,12 @@
             <div class="value" id="infra-maior-servidor">—</div>
             <div class="hint" id="infra-maior-servidor-host">—</div>
           </div>
-          <div class="card blue">
-            <div class="label">Custo Total / Mês</div>
-            <div class="value" id="infra-custo-total">—</div>
-          </div>
-          <div class="card green">
-            <div class="label">Custo por Cliente</div>
-            <div class="value" id="infra-custo-cliente">—</div>
-          </div>
         </div>
 
         <div class="filters-line">
           <label class="toggle-line">
             <input type="checkbox" id="toggle-estrutura-churn" onchange="toggleEstruturaChurn(this.checked)">
             Incluir clientes churn
-          </label>
-          <label class="toggle-line">
-            Valor por servidor (R$)
-            <input class="value-input" id="infra-server-cost" type="number" min="0" step="0.01" value="90" oninput="onInfraCostInput(this.value)">
           </label>
         </div>
         <input class="search-input" id="search-infra-servidor" placeholder="Filtrar por servidor ou cliente..." oninput="renderInfraServers()">
@@ -306,12 +294,24 @@
             <div class="label">Servidores Lotados</div>
             <div class="value" id="hosting-lotados">—</div>
           </div>
+          <div class="card blue">
+            <div class="label">Custo Total / Mês</div>
+            <div class="value" id="hosting-custo-total">—</div>
+          </div>
+          <div class="card green">
+            <div class="label">Custo por Cliente</div>
+            <div class="value" id="hosting-custo-cliente">—</div>
+          </div>
         </div>
 
         <div class="filters-line">
           <label class="toggle-line">
             <input type="checkbox" id="toggle-hosting-churn" onchange="toggleHostingChurn(this.checked)">
             Incluir clientes churn
+          </label>
+          <label class="toggle-line">
+            Valor por servidor (R$)
+            <input class="value-input" id="infra-server-cost" type="number" min="0" step="0.01" value="90" oninput="onInfraCostInput(this.value)">
           </label>
         </div>
         <input class="search-input" id="search-hosting" placeholder="Filtrar por servidor ou cliente..." oninput="renderHostingServers()">
@@ -381,6 +381,7 @@
       infraServerMonthlyCost = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
       localStorage.setItem(INFRA_COST_STORAGE_KEY, String(infraServerMonthlyCost));
       renderInfra();
+      renderHostingInfra();
     }
 
     function switchMainSection(section, el) {
@@ -762,13 +763,9 @@
     function renderInfra() {
       const active = getActiveClients();
       const servers = getInfraServers();
-      const totalCost = servers.length * infraServerMonthlyCost;
-      const costPerClient = active.length ? totalCost / active.length : 0;
       document.getElementById('infra-clientes-ativos').textContent = active.length;
       document.getElementById('infra-servidores-ativos').textContent = servers.length;
       document.getElementById('infra-media-servidor').textContent = servers.length ? (active.length / servers.length).toFixed(1) : '0';
-      document.getElementById('infra-custo-total').textContent = formatBRL(totalCost);
-      document.getElementById('infra-custo-cliente').textContent = formatBRL(costPerClient);
 
       const biggest = servers[0];
       document.getElementById('infra-maior-servidor').textContent = biggest ? biggest.clients.length : '0';
@@ -782,10 +779,14 @@
       const servers = getHostingServers();
       const totalVagas = servers.reduce((acc, s) => acc + Math.max(0, 3 - s.clients.length), 0);
       const lotados = servers.filter(s => s.clients.length >= 3).length;
+      const totalCost = servers.length * infraServerMonthlyCost;
+      const costPerClient = clients.length ? totalCost / clients.length : 0;
       document.getElementById('hosting-clientes').textContent = clients.length;
       document.getElementById('hosting-servidores').textContent = servers.length;
       document.getElementById('hosting-vagas').textContent = totalVagas;
       document.getElementById('hosting-lotados').textContent = lotados;
+      document.getElementById('hosting-custo-total').textContent = formatBRL(totalCost);
+      document.getElementById('hosting-custo-cliente').textContent = formatBRL(costPerClient);
       renderHostingServers();
     }
 
