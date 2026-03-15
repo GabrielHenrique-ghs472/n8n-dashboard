@@ -631,8 +631,12 @@
       try { return new URL(url).hostname; } catch { return url; }
     }
 
+    function getClientsArray() {
+      return Array.isArray(allClients) ? allClients : [];
+    }
+
     function getActiveClients(includeChurn = false) {
-      return (allClients || []).filter(c => includeChurn || c.churn !== true);
+      return getClientsArray().filter(c => includeChurn || c.churn !== true);
     }
 
     function getInfraServers() {
@@ -646,7 +650,7 @@
     }
 
     function getHostingClients() {
-      return (allClients || []).filter(c => c.servidor_proprio === false && (includeChurnHosting || c.churn !== true));
+      return getClientsArray().filter(c => c.servidor_proprio === false && (includeChurnHosting || c.churn !== true));
     }
 
     function getHostingServers() {
@@ -784,23 +788,40 @@
 
     // ── Todos os Clientes ─────────────────────────────────────────────────────
 
+    async function fetchClientsWithRetry(attempts = 2) {
+      let lastError = null;
+      for (let i = 1; i <= attempts; i++) {
+        try {
+          const res = await fetch('/api/clients');
+          let data;
+          try {
+            data = await res.json();
+          } catch {
+            throw new Error(`Resposta inválida da API (/api/clients), HTTP ${res.status}`);
+          }
+
+          if (!res.ok) throw new Error(data?.error || `Falha ao carregar clientes (HTTP ${res.status})`);
+          if (!Array.isArray(data)) throw new Error('Formato inválido: esperado uma lista de clientes.');
+          return data;
+        } catch (e) {
+          lastError = e;
+          if (i < attempts) await new Promise(r => setTimeout(r, 500));
+        }
+      }
+      throw lastError || new Error('Falha ao carregar clientes.');
+    }
+
     async function loadClients() {
       if (allClients) { renderInfra(); renderHostingInfra(); renderManutencao(); return; }
       const el = document.getElementById('content-manutencao');
       el.innerHTML = '<div class="empty"><p>Carregando...</p></div>';
       try {
-        const res  = await fetch('/api/clients');
-        allClients = await res.json();
-        if (allClients.error) {
-          el.innerHTML = `<div class="empty"><p>${esc(allClients.error)}</p></div>`;
-          document.getElementById('content-infra-servidores').innerHTML = `<div class="empty"><p>${esc(allClients.error)}</p></div>`;
-          document.getElementById('content-hosting-servidores').innerHTML = `<div class="empty"><p>${esc(allClients.error)}</p></div>`;
-          return;
-        }
+        allClients = await fetchClientsWithRetry(2);
         renderInfra();
         renderHostingInfra();
         renderManutencao();
       } catch (e) {
+        allClients = [];
         el.innerHTML = `<div class="empty"><p>Erro: ${esc(e.message)}</p></div>`;
         document.getElementById('content-infra-servidores').innerHTML = `<div class="empty"><p>Erro: ${esc(e.message)}</p></div>`;
         document.getElementById('content-hosting-servidores').innerHTML = `<div class="empty"><p>Erro: ${esc(e.message)}</p></div>`;
@@ -808,7 +829,7 @@
     }
 
     function renderManutencao() {
-      if (!allClients) return;
+      if (!Array.isArray(allClients)) return;
       const q = document.getElementById('search-manutencao').value.toLowerCase();
       const lista = allClients.filter(c =>
         !q || c.nome.toLowerCase().includes(q) || (c.n8n_url || '').toLowerCase().includes(q)
