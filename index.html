@@ -124,6 +124,57 @@
     .filters-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
     .toggle-line { display: inline-flex; align-items: center; gap: 8px; color: #7a7a7a; font-size: 12px; user-select: none; white-space: nowrap; }
     .toggle-line input { accent-color: #e5e7eb; }
+    .cliente-name-cell { font-weight: 400; color: #e8e8e8; }
+    .toggle-wrap { display: inline-flex; align-items: center; justify-content: center; }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 22px;
+    }
+    .switch-input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .switch-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background-color: #0f0f0f;
+      border: 1px solid #2a2a2a;
+      transition: .2s;
+      border-radius: 999px;
+    }
+    .switch-slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 2px;
+      top: 2px;
+      background-color: #2a2a2a;
+      transition: .2s;
+      border-radius: 50%;
+    }
+    .switch-input:checked + .switch-slider {
+      background-color: #f5f5f5;
+      border-color: #f5f5f5;
+    }
+    .switch-input:checked + .switch-slider:before {
+      transform: translateX(18px);
+      background-color: #050505;
+    }
+    .save-state {
+      font-size: 11px;
+      color: #555;
+      margin-left: 8px;
+      min-width: 48px;
+      display: inline-block;
+    }
+    .save-state.saving { color: #a0a0a0; }
+    .save-state.saved { color: #6b6b6b; }
+    .save-state.error { color: #f87171; }
     .capacity-badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid transparent; }
     .capacity-ok { color: #4ade80; background: #071208; border-color: #15331a; }
     .capacity-attention { color: #fbbf24; background: #120d04; border-color: #3a2c12; }
@@ -281,6 +332,8 @@
     let errorSubHeader = 'Grupo Síntese Digital · Últimas 24h';
     let includeChurnEstrutura = false;
     let includeChurnHosting = false;
+    const maintenanceSaveTimers = {};
+    const maintenanceSaveState = {};
 
     function esc(s) {
       return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -840,24 +893,40 @@
         return;
       }
 
-      function checkboxId(clientId, key) {
-        return `m-${key}-${String(clientId).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
-      }
-
       const rows = lista.map((c, i) => {
         let host = c.n8n_url || '—';
         try { host = new URL(c.n8n_url).hostname; } catch {}
-        const idAuto = checkboxId(c.id, 'auto');
-        const idServer = checkboxId(c.id, 'server');
-        const idChurn = checkboxId(c.id, 'churn');
+        const statusClass = maintenanceSaveState[String(c.id)] || '';
+        const statusText = statusClass === 'saving' ? 'Salvando' : statusClass === 'saved' ? 'Salvo' : statusClass === 'error' ? 'Erro' : '';
         return `<tr>
           <td style="color:#585858; font-size:12px; width:40px">${i + 1}</td>
-          <td style="font-weight:500">${esc(c.nome)}</td>
+          <td class="cliente-name-cell">${esc(c.nome)}</td>
           <td style="color:#555; font-size:12px; font-family:monospace">${esc(host)}</td>
-          <td><input type="checkbox" id="${idAuto}" ${c.AutoSintese ? 'checked' : ''}></td>
-          <td><input type="checkbox" id="${idServer}" ${c.servidor_proprio ? 'checked' : ''}></td>
-          <td><input type="checkbox" id="${idChurn}" ${c.churn ? 'checked' : ''}></td>
-          <td><button class="btn btn-green" style="padding:4px 10px; font-size:12px;" onclick="salvarCliente('${esc(c.id)}')">Salvar</button></td>
+          <td>
+            <div class="toggle-wrap">
+              <label class="switch">
+                <input class="switch-input" type="checkbox" ${c.AutoSintese ? 'checked' : ''} onchange="onToggleCliente('${esc(c.id)}', 'AutoSintese', this.checked)">
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+          </td>
+          <td>
+            <div class="toggle-wrap">
+              <label class="switch">
+                <input class="switch-input" type="checkbox" ${c.servidor_proprio ? 'checked' : ''} onchange="onToggleCliente('${esc(c.id)}', 'servidor_proprio', this.checked)">
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+          </td>
+          <td>
+            <div class="toggle-wrap">
+              <label class="switch">
+                <input class="switch-input" type="checkbox" ${c.churn ? 'checked' : ''} onchange="onToggleCliente('${esc(c.id)}', 'churn', this.checked)">
+                <span class="switch-slider"></span>
+              </label>
+              <span class="save-state ${statusClass}">${statusText}</span>
+            </div>
+          </td>
         </tr>`;
       }).join('');
 
@@ -871,38 +940,61 @@
               <th>AutoSintese</th>
               <th>Servidor Próprio</th>
               <th>Churn</th>
-              <th>Ação</th>
             </tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>`;
     }
 
+    function setSaveState(clientId, state) {
+      maintenanceSaveState[String(clientId)] = state;
+    }
+
+    function onToggleCliente(clientId, field, checked) {
+      const idx = getClientsArray().findIndex(c => String(c.id) === String(clientId));
+      if (idx < 0) return;
+      allClients[idx][field] = checked;
+      setSaveState(clientId, 'saving');
+
+      if (maintenanceSaveTimers[clientId]) clearTimeout(maintenanceSaveTimers[clientId]);
+      maintenanceSaveTimers[clientId] = setTimeout(() => salvarCliente(clientId), 250);
+      renderInfra();
+      renderHostingInfra();
+      renderManutencao();
+    }
+
     async function salvarCliente(clientId) {
-      const key = String(clientId).replace(/[^a-zA-Z0-9_-]/g, '_');
-      const auto = document.getElementById(`m-auto-${key}`)?.checked || false;
-      const server = document.getElementById(`m-server-${key}`)?.checked || false;
-      const churn = document.getElementById(`m-churn-${key}`)?.checked || false;
+      const idx = getClientsArray().findIndex(c => String(c.id) === String(clientId));
+      if (idx < 0) return;
+      const client = allClients[idx];
 
       try {
         const res = await fetch(`/api/clients/${encodeURIComponent(clientId)}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            AutoSintese: auto,
-            servidor_proprio: server,
-            churn,
+            AutoSintese: !!client.AutoSintese,
+            servidor_proprio: !!client.servidor_proprio,
+            churn: !!client.churn,
           }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Falha ao salvar');
 
-        const idx = allClients.findIndex(c => String(c.id) === String(clientId));
         if (idx >= 0) allClients[idx] = data;
+        maintenanceSaveState[String(clientId)] = 'saved';
+        setTimeout(() => {
+          if (maintenanceSaveState[String(clientId)] === 'saved') {
+            delete maintenanceSaveState[String(clientId)];
+            renderManutencao();
+          }
+        }, 1200);
         renderInfra();
         renderHostingInfra();
         renderManutencao();
       } catch (e) {
+        maintenanceSaveState[String(clientId)] = 'error';
+        renderManutencao();
         alert('Erro ao salvar cliente: ' + e.message);
       }
     }
