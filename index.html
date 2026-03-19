@@ -911,13 +911,22 @@
           ? '<span class="capacity-badge capacity-full">Lotado</span>'
           : '<span class="capacity-badge capacity-ok">Disponivel</span>';
         const clients = s.clients.map(c => `<span class="server-pill">${esc(c.nome)}</span>`).join('');
+        const uniqueKeys = [...new Set(s.clients.map(c => c.api_key).filter(Boolean))];
+        const hasKey = uniqueKeys.length > 0;
+        const encodedKey = hasKey ? encodeURIComponent(String(uniqueKeys[0])) : '';
         const serverCell = s.url
           ? `<a href="${esc(s.url)}" target="_blank" style="color:#9ca3af; text-decoration:none; font-family:monospace">${esc(s.host)}</a>`
           : `<span style="color:#9ca3af; font-family:monospace">${esc(s.host)}</span>`;
+        const keyWarning = uniqueKeys.length > 1 ? `<span style="font-size:10px; color:#fbbf24; margin-left:6px">keys diferentes</span>` : '';
+        const apiKeyCell = `<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+          <button class="copy-key-btn" ${hasKey ? `data-apikey="${encodedKey}" onclick="copyClientApiKey(this)"` : 'disabled'}>${hasKey ? 'Copiar key' : 'Sem key'}</button>
+          ${keyWarning}
+        </div>`;
 
         return `<tr>
           <td style="color:#585858; font-size:12px; width:40px">${i + 1}</td>
           <td>${serverCell}</td>
+          <td>${apiKeyCell}</td>
           <td><span class="pill">${count}</span></td>
           <td style="color:#9ca3af">${vagas}</td>
           <td>${status}</td>
@@ -928,7 +937,7 @@
       el.innerHTML = `
         <div class="table-wrap">
           <table>
-            <thead><tr><th>#</th><th>Servidor</th><th>Clientes</th><th>Vagas Livres</th><th>Status</th><th>Clientes Hospedados</th></tr></thead>
+            <thead><tr><th>#</th><th>Servidor</th><th>API Key</th><th>Clientes</th><th>Vagas Livres</th><th>Status</th><th>Clientes Hospedados</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>`;
