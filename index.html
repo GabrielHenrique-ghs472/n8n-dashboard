@@ -122,6 +122,18 @@
     .card .hint { margin-top: 8px; color: #4d4d4d; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .server-list { display: flex; flex-wrap: wrap; gap: 4px; }
     .server-pill { font-size: 11px; color: #8e8e8e; background: #0c0c0c; border: 1px solid #252525; padding: 2px 6px; border-radius: 999px; }
+    .client-key-item { display: inline-flex; align-items: center; gap: 4px; }
+    .copy-key-btn {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      border: 1px solid #2a2a2a;
+      background: #0a0a0a;
+      color: #7d7d7d;
+      cursor: pointer;
+    }
+    .copy-key-btn:hover { color: #d9d9d9; border-color: #4a4a4a; }
+    .copy-key-btn:disabled { opacity: .5; cursor: not-allowed; }
     .filters-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
     .toggle-line { display: inline-flex; align-items: center; gap: 8px; color: #7a7a7a; font-size: 12px; user-select: none; white-space: nowrap; }
     .toggle-line input { accent-color: #e5e7eb; }
@@ -816,7 +828,14 @@
       }
 
       const rows = list.map((s, i) => {
-        const clients = s.clients.map(c => `<span class="server-pill">${esc(c.nome)}</span>`).join('');
+        const clients = s.clients.map(c => {
+          const hasKey = Boolean(c.api_key);
+          const encodedKey = hasKey ? encodeURIComponent(String(c.api_key)) : '';
+          return `<span class="client-key-item">
+            <span class="server-pill">${esc(c.nome)}</span>
+            <button class="copy-key-btn" ${hasKey ? `data-apikey="${encodedKey}" onclick="copyClientApiKey(this)"` : 'disabled'}>${hasKey ? 'Copiar key' : 'Sem key'}</button>
+          </span>`;
+        }).join('');
         const serverCell = s.url
           ? `<a href="${esc(s.url)}" target="_blank" style="color:#9ca3af; text-decoration:none; font-family:monospace">${esc(s.host)}</a>`
           : `<span style="color:#9ca3af; font-family:monospace">${esc(s.host)}</span>`;
@@ -835,6 +854,31 @@
             <tbody>${rows}</tbody>
           </table>
         </div>`;
+    }
+
+    async function copyClientApiKey(btn) {
+      const encoded = btn?.getAttribute('data-apikey');
+      if (!encoded) return;
+      const key = decodeURIComponent(encoded);
+      const previous = btn.textContent;
+
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(key);
+        } else {
+          const tmp = document.createElement('textarea');
+          tmp.value = key;
+          document.body.appendChild(tmp);
+          tmp.select();
+          document.execCommand('copy');
+          document.body.removeChild(tmp);
+        }
+        btn.textContent = 'Copiado';
+      } catch {
+        btn.textContent = 'Falhou';
+      }
+
+      setTimeout(() => { btn.textContent = previous; }, 1000);
     }
 
     function renderHostingServers() {
