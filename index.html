@@ -124,13 +124,14 @@
     .server-pill { font-size: 11px; color: #8e8e8e; background: #0c0c0c; border: 1px solid #252525; padding: 2px 6px; border-radius: 999px; }
     .client-key-item { display: inline-flex; align-items: center; gap: 4px; }
     .copy-key-btn {
-      font-size: 10px;
-      padding: 2px 6px;
-      border-radius: 999px;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 6px;
       border: 1px solid #2a2a2a;
       background: #0a0a0a;
       color: #7d7d7d;
       cursor: pointer;
+      white-space: nowrap;
     }
     .copy-key-btn:hover { color: #d9d9d9; border-color: #4a4a4a; }
     .copy-key-btn:disabled { opacity: .5; cursor: not-allowed; }
@@ -829,11 +830,13 @@
 
       const rows = list.map((s, i) => {
         const clients = s.clients.map(c => {
+          return `<span class="server-pill">${esc(c.nome)}</span>`;
+        }).join('');
+        const apiKeys = s.clients.map(c => {
           const hasKey = Boolean(c.api_key);
           const encodedKey = hasKey ? encodeURIComponent(String(c.api_key)) : '';
           return `<span class="client-key-item">
-            <span class="server-pill">${esc(c.nome)}</span>
-            <button class="copy-key-btn" ${hasKey ? `data-apikey="${encodedKey}" onclick="copyClientApiKey(this)"` : 'disabled'}>${hasKey ? 'Copiar key' : 'Sem key'}</button>
+            <button class="copy-key-btn" ${hasKey ? `data-apikey="${encodedKey}" onclick="copyClientApiKey(this)"` : 'disabled'}>${hasKey ? `Copiar API key (${esc(c.nome)})` : `Sem key (${esc(c.nome)})`}</button>
           </span>`;
         }).join('');
         const serverCell = s.url
@@ -844,13 +847,14 @@
           <td>${serverCell}</td>
           <td><span class="pill">${s.clients.length}</span></td>
           <td><div class="server-list">${clients}</div></td>
+          <td><div class="server-list">${apiKeys}</div></td>
         </tr>`;
       }).join('');
 
       el.innerHTML = `
         <div class="table-wrap">
           <table>
-            <thead><tr><th>#</th><th>Servidor</th><th>Clientes Ativos</th><th>Clientes</th></tr></thead>
+            <thead><tr><th>#</th><th>Servidor</th><th>Clientes Ativos</th><th>Clientes</th><th>API Key</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>`;
