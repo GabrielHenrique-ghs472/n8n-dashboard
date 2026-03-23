@@ -218,6 +218,58 @@
       outline: none;
     }
     .form-input:focus { border-color: #4b4b4b; }
+    .combo-box { position: relative; }
+    .combo-input {
+      width: 100%;
+      padding: 8px 36px 8px 10px;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      background: #0a0a0a;
+      color: #e8e8e8;
+      font-size: 12px;
+      outline: none;
+    }
+    .combo-input:focus { border-color: #4b4b4b; }
+    .combo-toggle {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      border: none;
+      background: transparent;
+      color: #8a8a8a;
+      font-size: 11px;
+      cursor: pointer;
+      padding: 2px 4px;
+    }
+    .combo-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      z-index: 30;
+      max-height: 220px;
+      overflow-y: auto;
+      background: #080808;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      box-shadow: 0 8px 20px rgba(0,0,0,.45);
+      display: none;
+    }
+    .combo-option {
+      padding: 9px 10px;
+      font-size: 12px;
+      color: #d2d2d2;
+      cursor: pointer;
+      border-bottom: 1px solid #141414;
+    }
+    .combo-option:last-child { border-bottom: none; }
+    .combo-option:hover { background: #111; }
+    .combo-empty {
+      padding: 9px 10px;
+      font-size: 12px;
+      color: #686868;
+    }
 
     @media (max-width: 980px) {
       .app-shell { flex-direction: column; min-height: auto; }
@@ -256,8 +308,19 @@
       <div style="display:grid; gap:12px;">
         <div>
           <label class="form-label" for="add-credential-username">Username</label>
-          <input id="add-credential-username" class="form-input" type="text" list="add-credential-usernames-list" autocomplete="off" placeholder="Pesquise ou selecione um username">
-          <datalist id="add-credential-usernames-list"></datalist>
+          <div class="combo-box" id="add-credential-username-combo">
+            <input
+              id="add-credential-username"
+              class="combo-input"
+              type="text"
+              autocomplete="off"
+              placeholder="Pesquise ou selecione um username"
+              onfocus="openOwnerUsernameDropdown()"
+              oninput="onOwnerUsernameInput(this.value)"
+            >
+            <button class="combo-toggle" type="button" onclick="toggleOwnerUsernameDropdown(event)">▼</button>
+            <div id="add-credential-usernames-dropdown" class="combo-dropdown"></div>
+          </div>
         </div>
         <div>
           <label class="form-label" for="add-credential-n8n-key">N8N API Key</label>
@@ -426,6 +489,7 @@
     let infraServerMonthlyCost = loadInfraServerMonthlyCost();
     let ownerUsernamesCache = null;
     let ownerUsernamesPromise = null;
+    let ownerUsernamesFiltered = [];
 
     function esc(s) {
       return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -935,6 +999,7 @@
 
     function closeAddCredentialModal() {
       document.getElementById('add-credential-modal').style.display = 'none';
+      closeOwnerUsernameDropdown();
     }
 
     async function fetchOwnerUsernames() {
@@ -961,6 +1026,69 @@
       return ownerUsernamesPromise;
     }
 
+    function renderOwnerUsernameDropdown() {
+      const dropdown = document.getElementById('add-credential-usernames-dropdown');
+      if (!dropdown) return;
+
+      if (!ownerUsernamesFiltered.length) {
+        dropdown.innerHTML = '<div class="combo-empty">Nenhum username encontrado</div>';
+        return;
+      }
+
+      dropdown.innerHTML = ownerUsernamesFiltered
+        .map(u => `<div class="combo-option" onclick="selectOwnerUsername(decodeURIComponent('${encodeURIComponent(String(u))}'))">${esc(u)}</div>`)
+        .join('');
+    }
+
+    function openOwnerUsernameDropdown() {
+      const dropdown = document.getElementById('add-credential-usernames-dropdown');
+      if (!dropdown) return;
+      dropdown.style.display = 'block';
+    }
+
+    function closeOwnerUsernameDropdown() {
+      const dropdown = document.getElementById('add-credential-usernames-dropdown');
+      if (!dropdown) return;
+      dropdown.style.display = 'none';
+    }
+
+    function toggleOwnerUsernameDropdown(event) {
+      event?.preventDefault?.();
+      event?.stopPropagation?.();
+      const dropdown = document.getElementById('add-credential-usernames-dropdown');
+      if (!dropdown) return;
+      const isOpen = dropdown.style.display === 'block';
+      if (isOpen) {
+        closeOwnerUsernameDropdown();
+      } else {
+        openOwnerUsernameDropdown();
+      }
+    }
+
+    function onOwnerUsernameInput(value) {
+      const q = String(value || '').trim().toLowerCase();
+      const base = Array.isArray(ownerUsernamesCache) ? ownerUsernamesCache : [];
+      ownerUsernamesFiltered = !q
+        ? [...base]
+        : base.filter(u => String(u).toLowerCase().includes(q));
+      renderOwnerUsernameDropdown();
+      openOwnerUsernameDropdown();
+    }
+
+    function selectOwnerUsername(username) {
+      const input = document.getElementById('add-credential-username');
+      if (input) input.value = username;
+      closeOwnerUsernameDropdown();
+    }
+
+    document.addEventListener('click', (event) => {
+      const combo = document.getElementById('add-credential-username-combo');
+      if (!combo) return;
+      if (!combo.contains(event.target)) {
+        closeOwnerUsernameDropdown();
+      }
+    });
+
     function extractN8nSuffix(hostOrUrl) {
       const raw = String(hostOrUrl || '').trim();
       if (!raw) return '';
@@ -983,7 +1111,6 @@
       const serverUrl = btn?.getAttribute('data-server-url') || '';
       const suffix = extractN8nSuffix(serverUrl || serverHost);
       const usernameInput = document.getElementById('add-credential-username');
-      const usernamesList = document.getElementById('add-credential-usernames-list');
 
       document.getElementById('add-credential-server-label').textContent = serverHost || serverUrl || 'Servidor';
       document.getElementById('add-credential-n8n-key').value = apiKey;
@@ -993,21 +1120,24 @@
       usernameInput.value = '';
       usernameInput.disabled = true;
       usernameInput.placeholder = 'Carregando usernames...';
-      usernamesList.innerHTML = '';
+      ownerUsernamesFiltered = [];
+      renderOwnerUsernameDropdown();
       document.getElementById('add-credential-modal').style.display = 'flex';
 
       try {
         const users = await fetchOwnerUsernames();
-        usernamesList.innerHTML = users.length
-          ? users.map(u => `<option value="${esc(u)}"></option>`).join('')
-          : '';
-        usernameInput.value = users[0] || '';
+        ownerUsernamesFiltered = [...users];
+        renderOwnerUsernameDropdown();
+        usernameInput.value = '';
         usernameInput.placeholder = users.length
           ? 'Pesquise ou selecione um username'
           : 'Nenhum owner encontrado';
+        openOwnerUsernameDropdown();
       } catch (e) {
         usernameInput.value = '';
         usernameInput.placeholder = 'Erro ao carregar owners';
+        ownerUsernamesFiltered = [];
+        renderOwnerUsernameDropdown();
         console.error(e);
       } finally {
         usernameInput.disabled = false;
