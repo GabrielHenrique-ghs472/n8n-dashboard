@@ -153,35 +153,37 @@ const server = http.createServer((req, res) => {
   // Lista owners do projeto Database (users.role = owner)
   if (req.method === 'GET' && url.pathname === '/api/owner-users') {
     const search = (url.searchParams.get('q') || '').trim().toLowerCase();
-    supabaseDatabase
-      .from('users')
-      .select('id, username, niche, app, crm')
-      .eq('role', 'owner')
-      .not('username', 'is', null)
-      .order('username', { ascending: true })
-      .then(({ data, error }) => {
-        if (error) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          return res.end(JSON.stringify({ error: error.message }));
-        }
+    (async () => {
+      const { data, error } = await supabaseDatabase
+        .from('users')
+        .select('id, username, niche')
+        .eq('role', 'owner')
+        .not('username', 'is', null)
+        .order('username', { ascending: true });
 
-        let owners = (data || [])
-          .map(row => ({
-            id: row?.id ?? null,
-            username: String(row?.username || '').trim(),
-            niche: row?.niche ?? null,
-            app: !!row?.app,
-            crm: !!row?.crm,
-          }))
-          .filter(row => row.username);
+      if (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: error.message }));
+      }
 
-        if (search) {
-          owners = owners.filter(row => row.username.toLowerCase().includes(search));
-        }
+      let owners = (data || [])
+        .map(row => ({
+          id: row?.id ?? null,
+          username: String(row?.username || '').trim(),
+          niche: row?.niche ?? null,
+        }))
+        .filter(row => row.username);
 
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(owners));
-      });
+      if (search) {
+        owners = owners.filter(row => row.username.toLowerCase().includes(search));
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(owners));
+    })().catch(err => {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    });
     return;
   }
 
@@ -199,8 +201,6 @@ const server = http.createServer((req, res) => {
           duplicate: !!body?.duplicate,
           credential_user_id: body?.credential_user_id ?? null,
           credential_username: body?.credential_username ?? null,
-          app: !!body?.app,
-          crm: !!body?.crm,
         };
 
         if (!payload.username || !payload.n8nApiKey || !payload.n8nSuffix || !payload.openaiApiKey) {
