@@ -195,6 +195,7 @@ const server = http.createServer((req, res) => {
           username: body?.username ?? null,
           user_id: body?.user_id ?? null,
           niche: body?.niche ?? null,
+          n8nUrl: body?.n8nUrl ?? null,
           n8nApiKey: body?.n8nApiKey ?? null,
           n8nSuffix: body?.n8nSuffix ?? null,
           openaiApiKey: body?.openaiApiKey ?? null,
@@ -223,10 +224,59 @@ const server = http.createServer((req, res) => {
           }));
         }
 
+        // Persiste no mcp_clientes após sucesso no webhook
+        let dbAction = 'none';
+        if (payload.username && payload.n8nUrl && payload.n8nApiKey) {
+          const { data: existing, error: findError } = await supabase
+            .from('mcp_clientes')
+            .select('id')
+            .eq('nome', payload.username)
+            .limit(1);
+
+          if (findError) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ error: `Falha ao consultar mcp_clientes: ${findError.message}` }));
+          }
+
+          if (Array.isArray(existing) && existing.length > 0) {
+            const { error: updateError } = await supabase
+              .from('mcp_clientes')
+              .update({
+                n8n_url: payload.n8nUrl,
+                api_key: payload.n8nApiKey,
+              })
+              .eq('id', existing[0].id);
+
+            if (updateError) {
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              return res.end(JSON.stringify({ error: `Falha ao atualizar mcp_clientes: ${updateError.message}` }));
+            }
+            dbAction = 'updated';
+          } else {
+            const { error: insertError } = await supabase
+              .from('mcp_clientes')
+              .insert({
+                nome: payload.username,
+                n8n_url: payload.n8nUrl,
+                api_key: payload.n8nApiKey,
+                AutoSintese: true,
+                churn: false,
+                servidor_proprio: false,
+              });
+
+            if (insertError) {
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              return res.end(JSON.stringify({ error: `Falha ao inserir em mcp_clientes: ${insertError.message}` }));
+            }
+            dbAction = 'inserted';
+          }
+        }
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           status: 'sent',
           webhookStatus: webhookRes.status,
+          dbAction,
           payload,
           webhookResponse: responseText,
         }));
