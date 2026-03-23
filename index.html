@@ -509,6 +509,7 @@
     let ownerUsersCache = null;
     let ownerUsersPromise = null;
     let ownerUsersFiltered = [];
+    let addCredentialTargetUrl = '';
 
     function esc(s) {
       return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1144,6 +1145,7 @@
       const serverHost = btn?.getAttribute('data-server-host') || '';
       const serverUrl = btn?.getAttribute('data-server-url') || '';
       const suffix = extractN8nSuffix(serverUrl || serverHost);
+      addCredentialTargetUrl = serverUrl || (serverHost ? `https://${serverHost}` : '');
       const usernameInput = document.getElementById('add-credential-username');
 
       document.getElementById('add-credential-server-label').textContent = serverHost || serverUrl || 'Servidor';
@@ -1227,6 +1229,10 @@
           throw new Error(`Resposta inválida da API (/api/duplicacao), HTTP ${res.status}`);
         }
         if (!res.ok) throw new Error(data?.error || `Falha ao enviar (HTTP ${res.status})`);
+        if (addCredentialTargetUrl) {
+          window.location.href = addCredentialTargetUrl;
+          return;
+        }
         setAddCredentialMessage('Dados enviados com sucesso para o webhook.', 'ok');
       } catch (e) {
         setAddCredentialMessage(`Erro ao enviar: ${e.message}`, 'error');
