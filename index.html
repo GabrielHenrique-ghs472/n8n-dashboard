@@ -256,7 +256,8 @@
       <div style="display:grid; gap:12px;">
         <div>
           <label class="form-label" for="add-credential-username">Username</label>
-          <select id="add-credential-username" class="form-input"></select>
+          <input id="add-credential-username" class="form-input" type="text" list="add-credential-usernames-list" autocomplete="off" placeholder="Pesquise ou selecione um username">
+          <datalist id="add-credential-usernames-list"></datalist>
         </div>
         <div>
           <label class="form-label" for="add-credential-n8n-key">N8N API Key</label>
@@ -423,6 +424,8 @@
     const maintenanceSort = { key: null, direction: 'active_first' };
     const INFRA_COST_STORAGE_KEY = 'infra_server_monthly_cost';
     let infraServerMonthlyCost = loadInfraServerMonthlyCost();
+    let ownerUsernamesCache = null;
+    let ownerUsernamesPromise = null;
 
     function esc(s) {
       return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -934,6 +937,30 @@
       document.getElementById('add-credential-modal').style.display = 'none';
     }
 
+    async function fetchOwnerUsernames() {
+      if (Array.isArray(ownerUsernamesCache)) return ownerUsernamesCache;
+      if (ownerUsernamesPromise) return ownerUsernamesPromise;
+
+      ownerUsernamesPromise = fetch('/api/owner-usernames')
+        .then(async res => {
+          let data = [];
+          try {
+            data = await res.json();
+          } catch {
+            throw new Error(`Resposta inválida da API (/api/owner-usernames), HTTP ${res.status}`);
+          }
+          if (!res.ok) throw new Error(data?.error || `Falha ao carregar owners (HTTP ${res.status})`);
+          if (!Array.isArray(data)) throw new Error('Formato inválido: esperado uma lista de usernames.');
+          ownerUsernamesCache = data;
+          return ownerUsernamesCache;
+        })
+        .finally(() => {
+          ownerUsernamesPromise = null;
+        });
+
+      return ownerUsernamesPromise;
+    }
+
     function extractN8nSuffix(hostOrUrl) {
       const raw = String(hostOrUrl || '').trim();
       if (!raw) return '';
@@ -949,29 +976,42 @@
       return firstLabel.replace(/^(n8n|webhook)/i, '');
     }
 
-    function openAddCredentialModal(btn) {
+    async function openAddCredentialModal(btn) {
       const encodedKey = btn?.getAttribute('data-apikey') || '';
       const apiKey = encodedKey ? decodeURIComponent(encodedKey) : '';
       const serverHost = btn?.getAttribute('data-server-host') || '';
       const serverUrl = btn?.getAttribute('data-server-url') || '';
       const suffix = extractN8nSuffix(serverUrl || serverHost);
-
-      const users = [...new Set((allClients || [])
-        .map(c => String(c?.nome || '').trim())
-        .filter(Boolean))]
-        .sort((a, b) => a.localeCompare(b, 'pt-BR'));
-
-      const usernameSelect = document.getElementById('add-credential-username');
-      usernameSelect.innerHTML = users.length
-        ? users.map(u => `<option value="${esc(u)}">${esc(u)}</option>`).join('')
-        : '<option value="">Sem usernames disponíveis</option>';
+      const usernameInput = document.getElementById('add-credential-username');
+      const usernamesList = document.getElementById('add-credential-usernames-list');
 
       document.getElementById('add-credential-server-label').textContent = serverHost || serverUrl || 'Servidor';
       document.getElementById('add-credential-n8n-key').value = apiKey;
       document.getElementById('add-credential-suffix').value = suffix;
       document.getElementById('add-credential-openai-key').value = '';
       document.getElementById('add-credential-no-duplicate').checked = false;
+      usernameInput.value = '';
+      usernameInput.disabled = true;
+      usernameInput.placeholder = 'Carregando usernames...';
+      usernamesList.innerHTML = '';
       document.getElementById('add-credential-modal').style.display = 'flex';
+
+      try {
+        const users = await fetchOwnerUsernames();
+        usernamesList.innerHTML = users.length
+          ? users.map(u => `<option value="${esc(u)}"></option>`).join('')
+          : '';
+        usernameInput.value = users[0] || '';
+        usernameInput.placeholder = users.length
+          ? 'Pesquise ou selecione um username'
+          : 'Nenhum owner encontrado';
+      } catch (e) {
+        usernameInput.value = '';
+        usernameInput.placeholder = 'Erro ao carregar owners';
+        console.error(e);
+      } finally {
+        usernameInput.disabled = false;
+      }
     }
 
     function renderHostingServers() {

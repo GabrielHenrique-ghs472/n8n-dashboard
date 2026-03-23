@@ -10,6 +10,10 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
+const supabaseDatabase = createClient(
+  process.env.DATABASE_URL || process.env.SUPABASE_URL,
+  process.env.DATABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_KEY
+);
 
 const PORT = process.env.PORT || process.env.DASHBOARD_PORT || 3456;
 const REPORT_FILE = path.join(__dirname, 'report.json');
@@ -141,6 +145,35 @@ const server = http.createServer((req, res) => {
         }
         res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
         res.end(JSON.stringify(data));
+      });
+    return;
+  }
+
+  // Lista usernames do projeto Database (users.role = owner)
+  if (req.method === 'GET' && url.pathname === '/api/owner-usernames') {
+    const search = (url.searchParams.get('q') || '').trim().toLowerCase();
+    supabaseDatabase
+      .from('users')
+      .select('username')
+      .eq('role', 'owner')
+      .not('username', 'is', null)
+      .order('username', { ascending: true })
+      .then(({ data, error }) => {
+        if (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: error.message }));
+        }
+
+        let usernames = [...new Set((data || [])
+          .map(row => String(row?.username || '').trim())
+          .filter(Boolean))];
+
+        if (search) {
+          usernames = usernames.filter(u => u.toLowerCase().includes(search));
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(usernames));
       });
     return;
   }
