@@ -18,6 +18,7 @@ const supabaseDatabase = createClient(
 const PORT = process.env.PORT || process.env.DASHBOARD_PORT || 3456;
 const REPORT_FILE = path.join(__dirname, 'report.json');
 const HTML_FILE = path.join(__dirname, 'index.html');
+const DUPLICACAO_WEBHOOK_URL = 'https://webhooksintese.gruposintesedigital.com/webhook/dados-duplicacao';
 
 let refreshing = false;
 let syncing = false;
@@ -149,12 +150,12 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Lista usernames do projeto Database (users.role = owner)
-  if (req.method === 'GET' && url.pathname === '/api/owner-usernames') {
+  // Lista owners do projeto Database (users.role = owner)
+  if (req.method === 'GET' && url.pathname === '/api/owner-users') {
     const search = (url.searchParams.get('q') || '').trim().toLowerCase();
     supabaseDatabase
       .from('users')
-      .select('username')
+      .select('id, username, niche, app, crm')
       .eq('role', 'owner')
       .not('username', 'is', null)
       .order('username', { ascending: true })
@@ -164,16 +165,75 @@ const server = http.createServer((req, res) => {
           return res.end(JSON.stringify({ error: error.message }));
         }
 
-        let usernames = [...new Set((data || [])
-          .map(row => String(row?.username || '').trim())
-          .filter(Boolean))];
+        let owners = (data || [])
+          .map(row => ({
+            id: row?.id ?? null,
+            username: String(row?.username || '').trim(),
+            niche: row?.niche ?? null,
+            app: !!row?.app,
+            crm: !!row?.crm,
+          }))
+          .filter(row => row.username);
 
         if (search) {
-          usernames = usernames.filter(u => u.toLowerCase().includes(search));
+          owners = owners.filter(row => row.username.toLowerCase().includes(search));
         }
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(usernames));
+        res.end(JSON.stringify(owners));
+      });
+    return;
+  }
+
+  // Envia payload de duplicação para o webhook n8n
+  if (req.method === 'POST' && url.pathname === '/api/duplicacao') {
+    readJsonBody(req)
+      .then(async body => {
+        const payload = {
+          username: body?.username ?? null,
+          user_id: body?.user_id ?? null,
+          niche: body?.niche ?? null,
+          n8nApiKey: body?.n8nApiKey ?? null,
+          n8nSuffix: body?.n8nSuffix ?? null,
+          openaiApiKey: body?.openaiApiKey ?? null,
+          duplicate: !!body?.duplicate,
+          credential_user_id: body?.credential_user_id ?? null,
+          credential_username: body?.credential_username ?? null,
+          app: !!body?.app,
+          crm: !!body?.crm,
+        };
+
+        if (!payload.username || !payload.n8nApiKey || !payload.n8nSuffix || !payload.openaiApiKey) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: 'Campos obrigatórios: username, n8nApiKey, n8nSuffix, openaiApiKey.' }));
+        }
+
+        const webhookRes = await fetch(DUPLICACAO_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const responseText = await webhookRes.text();
+        if (!webhookRes.ok) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({
+            error: `Falha no webhook (${webhookRes.status})`,
+            details: responseText,
+          }));
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          status: 'sent',
+          webhookStatus: webhookRes.status,
+          payload,
+          webhookResponse: responseText,
+        }));
+      })
+      .catch(err => {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
       });
     return;
   }

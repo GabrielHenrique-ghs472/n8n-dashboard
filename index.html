@@ -270,6 +270,20 @@
       font-size: 12px;
       color: #686868;
     }
+    .modal-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .modal-msg {
+      margin-top: 8px;
+      font-size: 12px;
+      min-height: 16px;
+    }
+    .modal-msg.ok { color: #4ade80; }
+    .modal-msg.error { color: #f87171; }
 
     @media (max-width: 980px) {
       .app-shell { flex-direction: column; min-height: auto; }
@@ -339,6 +353,11 @@
           Não duplicar credenciais
         </label>
       </div>
+      <div class="modal-actions">
+        <button class="copy-key-btn" onclick="closeAddCredentialModal()">Cancelar</button>
+        <button class="btn btn-primary" id="btn-send-duplicacao" onclick="sendDuplicacao()">Enviar</button>
+      </div>
+      <div id="add-credential-message" class="modal-msg"></div>
     </div>
   </div>
 
@@ -487,9 +506,9 @@
     const maintenanceSort = { key: null, direction: 'active_first' };
     const INFRA_COST_STORAGE_KEY = 'infra_server_monthly_cost';
     let infraServerMonthlyCost = loadInfraServerMonthlyCost();
-    let ownerUsernamesCache = null;
-    let ownerUsernamesPromise = null;
-    let ownerUsernamesFiltered = [];
+    let ownerUsersCache = null;
+    let ownerUsersPromise = null;
+    let ownerUsersFiltered = [];
 
     function esc(s) {
       return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -999,44 +1018,58 @@
 
     function closeAddCredentialModal() {
       document.getElementById('add-credential-modal').style.display = 'none';
+      setAddCredentialMessage('');
       closeOwnerUsernameDropdown();
     }
 
-    async function fetchOwnerUsernames() {
-      if (Array.isArray(ownerUsernamesCache)) return ownerUsernamesCache;
-      if (ownerUsernamesPromise) return ownerUsernamesPromise;
+    async function fetchOwnerUsers() {
+      if (Array.isArray(ownerUsersCache)) return ownerUsersCache;
+      if (ownerUsersPromise) return ownerUsersPromise;
 
-      ownerUsernamesPromise = fetch('/api/owner-usernames')
+      ownerUsersPromise = fetch('/api/owner-users')
         .then(async res => {
           let data = [];
           try {
             data = await res.json();
           } catch {
-            throw new Error(`Resposta inválida da API (/api/owner-usernames), HTTP ${res.status}`);
+            throw new Error(`Resposta inválida da API (/api/owner-users), HTTP ${res.status}`);
           }
           if (!res.ok) throw new Error(data?.error || `Falha ao carregar owners (HTTP ${res.status})`);
-          if (!Array.isArray(data)) throw new Error('Formato inválido: esperado uma lista de usernames.');
-          ownerUsernamesCache = data;
-          return ownerUsernamesCache;
+          if (!Array.isArray(data)) throw new Error('Formato inválido: esperado uma lista de owners.');
+          ownerUsersCache = data;
+          return ownerUsersCache;
         })
         .finally(() => {
-          ownerUsernamesPromise = null;
+          ownerUsersPromise = null;
         });
 
-      return ownerUsernamesPromise;
+      return ownerUsersPromise;
+    }
+
+    function getOwnerByUsername(username) {
+      const v = String(username || '').trim().toLowerCase();
+      if (!v || !Array.isArray(ownerUsersCache)) return null;
+      return ownerUsersCache.find(u => String(u?.username || '').trim().toLowerCase() === v) || null;
+    }
+
+    function setAddCredentialMessage(message, type = '') {
+      const el = document.getElementById('add-credential-message');
+      if (!el) return;
+      el.textContent = message || '';
+      el.className = `modal-msg${type ? ` ${type}` : ''}`;
     }
 
     function renderOwnerUsernameDropdown() {
       const dropdown = document.getElementById('add-credential-usernames-dropdown');
       if (!dropdown) return;
 
-      if (!ownerUsernamesFiltered.length) {
+      if (!ownerUsersFiltered.length) {
         dropdown.innerHTML = '<div class="combo-empty">Nenhum username encontrado</div>';
         return;
       }
 
-      dropdown.innerHTML = ownerUsernamesFiltered
-        .map(u => `<div class="combo-option" onclick="selectOwnerUsername(decodeURIComponent('${encodeURIComponent(String(u))}'))">${esc(u)}</div>`)
+      dropdown.innerHTML = ownerUsersFiltered
+        .map(u => `<div class="combo-option" onclick="selectOwnerUsername(decodeURIComponent('${encodeURIComponent(String(u?.username || ''))}'))">${esc(u?.username || '')}</div>`)
         .join('');
     }
 
@@ -1067,10 +1100,10 @@
 
     function onOwnerUsernameInput(value) {
       const q = String(value || '').trim().toLowerCase();
-      const base = Array.isArray(ownerUsernamesCache) ? ownerUsernamesCache : [];
-      ownerUsernamesFiltered = !q
+      const base = Array.isArray(ownerUsersCache) ? ownerUsersCache : [];
+      ownerUsersFiltered = !q
         ? [...base]
-        : base.filter(u => String(u).toLowerCase().includes(q));
+        : base.filter(u => String(u?.username || '').toLowerCase().includes(q));
       renderOwnerUsernameDropdown();
       openOwnerUsernameDropdown();
     }
@@ -1078,6 +1111,7 @@
     function selectOwnerUsername(username) {
       const input = document.getElementById('add-credential-username');
       if (input) input.value = username;
+      setAddCredentialMessage('');
       closeOwnerUsernameDropdown();
     }
 
@@ -1117,16 +1151,17 @@
       document.getElementById('add-credential-suffix').value = suffix;
       document.getElementById('add-credential-openai-key').value = '';
       document.getElementById('add-credential-no-duplicate').checked = false;
+      setAddCredentialMessage('');
       usernameInput.value = '';
       usernameInput.disabled = true;
       usernameInput.placeholder = 'Carregando usernames...';
-      ownerUsernamesFiltered = [];
+      ownerUsersFiltered = [];
       renderOwnerUsernameDropdown();
       document.getElementById('add-credential-modal').style.display = 'flex';
 
       try {
-        const users = await fetchOwnerUsernames();
-        ownerUsernamesFiltered = [...users];
+        const users = await fetchOwnerUsers();
+        ownerUsersFiltered = [...users];
         renderOwnerUsernameDropdown();
         usernameInput.value = '';
         usernameInput.placeholder = users.length
@@ -1136,11 +1171,70 @@
       } catch (e) {
         usernameInput.value = '';
         usernameInput.placeholder = 'Erro ao carregar owners';
-        ownerUsernamesFiltered = [];
+        ownerUsersFiltered = [];
         renderOwnerUsernameDropdown();
         console.error(e);
       } finally {
         usernameInput.disabled = false;
+      }
+    }
+
+    async function sendDuplicacao() {
+      const btn = document.getElementById('btn-send-duplicacao');
+      const username = (document.getElementById('add-credential-username').value || '').trim();
+      const n8nApiKey = (document.getElementById('add-credential-n8n-key').value || '').trim();
+      const n8nSuffix = (document.getElementById('add-credential-suffix').value || '').trim();
+      const openaiApiKey = (document.getElementById('add-credential-openai-key').value || '').trim();
+      const noDuplicate = !!document.getElementById('add-credential-no-duplicate').checked;
+      const owner = getOwnerByUsername(username);
+
+      if (!owner) {
+        setAddCredentialMessage('Selecione um username válido da lista de owners.', 'error');
+        return;
+      }
+      if (!n8nApiKey || !n8nSuffix || !openaiApiKey) {
+        setAddCredentialMessage('Preencha N8N API Key, Sufixo n8n e OpenAI API Key.', 'error');
+        return;
+      }
+
+      const payload = {
+        username: owner.username,
+        user_id: owner.id ?? null,
+        niche: owner.niche ?? null,
+        n8nApiKey,
+        n8nSuffix,
+        openaiApiKey,
+        duplicate: !noDuplicate,
+        credential_user_id: null,
+        credential_username: null,
+        app: !!owner.app,
+        crm: !!owner.crm,
+      };
+
+      const prev = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+      setAddCredentialMessage('');
+
+      try {
+        const res = await fetch('/api/duplicacao', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        let data = {};
+        try {
+          data = await res.json();
+        } catch {
+          throw new Error(`Resposta inválida da API (/api/duplicacao), HTTP ${res.status}`);
+        }
+        if (!res.ok) throw new Error(data?.error || `Falha ao enviar (HTTP ${res.status})`);
+        setAddCredentialMessage('Dados enviados com sucesso para o webhook.', 'ok');
+      } catch (e) {
+        setAddCredentialMessage(`Erro ao enviar: ${e.message}`, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = prev;
       }
     }
 
