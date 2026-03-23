@@ -206,6 +206,18 @@
     .capacity-ok { color: #4ade80; background: #071208; border-color: #15331a; }
     .capacity-attention { color: #fbbf24; background: #120d04; border-color: #3a2c12; }
     .capacity-full { color: #f87171; background: #140707; border-color: #3f1717; }
+    .form-label { display: block; font-size: 12px; color: #7a7a7a; margin-bottom: 6px; }
+    .form-input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      background: #0a0a0a;
+      color: #e8e8e8;
+      font-size: 12px;
+      outline: none;
+    }
+    .form-input:focus { border-color: #4b4b4b; }
 
     @media (max-width: 980px) {
       .app-shell { flex-direction: column; min-height: auto; }
@@ -228,6 +240,41 @@
         <button onclick="document.getElementById('sync-modal').style.display='none'" style="background:none; border:none; cursor:pointer; font-size:20px;">✕</button>
       </div>
       <div id="sync-modal-body"></div>
+    </div>
+  </div>
+
+  <div id="add-credential-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:220; align-items:center; justify-content:center;">
+    <div class="modal-inner">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+        <div>
+          <h2 style="font-size:16px; font-weight:600;">Adicionar Credencial</h2>
+          <div id="add-credential-server-label" style="margin-top:4px; color:#5b5b5b; font-size:12px;"></div>
+        </div>
+        <button onclick="closeAddCredentialModal()" style="background:none; border:none; cursor:pointer; font-size:20px;">✕</button>
+      </div>
+
+      <div style="display:grid; gap:12px;">
+        <div>
+          <label class="form-label" for="add-credential-username">Username</label>
+          <select id="add-credential-username" class="form-input"></select>
+        </div>
+        <div>
+          <label class="form-label" for="add-credential-n8n-key">N8N API Key</label>
+          <input id="add-credential-n8n-key" class="form-input" type="text" autocomplete="off">
+        </div>
+        <div>
+          <label class="form-label" for="add-credential-suffix">Sufixo n8n</label>
+          <input id="add-credential-suffix" class="form-input" type="text" autocomplete="off">
+        </div>
+        <div>
+          <label class="form-label" for="add-credential-openai-key">OpenAI API Key</label>
+          <input id="add-credential-openai-key" class="form-input" type="text" autocomplete="off" placeholder="sk-...">
+        </div>
+        <label class="toggle-line" style="margin-top:2px;">
+          <input type="checkbox" id="add-credential-no-duplicate">
+          Não duplicar credenciais
+        </label>
+      </div>
     </div>
   </div>
 
@@ -883,6 +930,50 @@
       setTimeout(() => { btn.textContent = previous; }, 1000);
     }
 
+    function closeAddCredentialModal() {
+      document.getElementById('add-credential-modal').style.display = 'none';
+    }
+
+    function extractN8nSuffix(hostOrUrl) {
+      const raw = String(hostOrUrl || '').trim();
+      if (!raw) return '';
+
+      let hostname = raw;
+      try {
+        hostname = new URL(raw).hostname;
+      } catch {
+        hostname = raw.replace(/^https?:\/\//i, '').split('/')[0];
+      }
+
+      const firstLabel = hostname.split('.')[0] || '';
+      return firstLabel.replace(/^(n8n|webhook)/i, '');
+    }
+
+    function openAddCredentialModal(btn) {
+      const encodedKey = btn?.getAttribute('data-apikey') || '';
+      const apiKey = encodedKey ? decodeURIComponent(encodedKey) : '';
+      const serverHost = btn?.getAttribute('data-server-host') || '';
+      const serverUrl = btn?.getAttribute('data-server-url') || '';
+      const suffix = extractN8nSuffix(serverUrl || serverHost);
+
+      const users = [...new Set((allClients || [])
+        .map(c => String(c?.nome || '').trim())
+        .filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+      const usernameSelect = document.getElementById('add-credential-username');
+      usernameSelect.innerHTML = users.length
+        ? users.map(u => `<option value="${esc(u)}">${esc(u)}</option>`).join('')
+        : '<option value="">Sem usernames disponíveis</option>';
+
+      document.getElementById('add-credential-server-label').textContent = serverHost || serverUrl || 'Servidor';
+      document.getElementById('add-credential-n8n-key').value = apiKey;
+      document.getElementById('add-credential-suffix').value = suffix;
+      document.getElementById('add-credential-openai-key').value = '';
+      document.getElementById('add-credential-no-duplicate').checked = false;
+      document.getElementById('add-credential-modal').style.display = 'flex';
+    }
+
     function renderHostingServers() {
       const q = (document.getElementById('search-hosting').value || '').toLowerCase();
       const list = getHostingServers()
@@ -922,11 +1013,16 @@
           <button class="copy-key-btn" ${hasKey ? `data-apikey="${encodedKey}" onclick="copyClientApiKey(this)"` : 'disabled'}>${hasKey ? 'Copiar key' : 'Sem key'}</button>
           ${keyWarning}
         </div>`;
+        const addCell = `<button
+          class="copy-key-btn"
+          ${hasKey ? `data-apikey="${encodedKey}" data-server-host="${esc(s.host)}" data-server-url="${esc(s.url || '')}" onclick="openAddCredentialModal(this)"` : 'disabled'}
+        >Adicionar</button>`;
 
         return `<tr>
           <td style="color:#585858; font-size:12px; width:40px">${i + 1}</td>
           <td>${serverCell}</td>
           <td>${apiKeyCell}</td>
+          <td>${addCell}</td>
           <td><span class="pill">${count}</span></td>
           <td style="color:#9ca3af">${vagas}</td>
           <td>${status}</td>
@@ -937,7 +1033,7 @@
       el.innerHTML = `
         <div class="table-wrap">
           <table>
-            <thead><tr><th>#</th><th>Servidor</th><th>API Key</th><th>Clientes</th><th>Vagas Livres</th><th>Status</th><th>Clientes Hospedados</th></tr></thead>
+            <thead><tr><th>#</th><th>Servidor</th><th>API Key</th><th>Adicionar</th><th>Clientes</th><th>Vagas Livres</th><th>Status</th><th>Clientes Hospedados</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>`;
