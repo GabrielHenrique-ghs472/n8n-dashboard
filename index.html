@@ -284,6 +284,11 @@
     }
     .modal-msg.ok { color: #4ade80; }
     .modal-msg.error { color: #f87171; }
+    .embedded-card { background:#080808; border:1px solid #282828; border-radius:8px; overflow:hidden; }
+    .embedded-header { padding:10px 14px; border-bottom:1px solid #282828; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .embedded-title { font-size:12px; color:#7a7a7a; }
+    .embedded-frame { width:100%; height:78vh; border:0; background:#000; }
+    .embedded-empty { padding:22px; color:#777; font-size:13px; }
 
     @media (max-width: 980px) {
       .app-shell { flex-direction: column; min-height: auto; }
@@ -385,6 +390,7 @@
       <button class="side-tab" id="menu-hosting" onclick="switchMainSection('hosting', this)">Infra de servidores</button>
       <button class="side-tab" id="menu-erros" onclick="switchMainSection('erros', this)">Erros n8n</button>
       <button class="side-tab" id="menu-manutencao" onclick="switchMainSection('manutencao', this)">Manutenção de clientes</button>
+      <button class="side-tab" id="menu-atualizacao" onclick="switchMainSection('atualizacao', this)">Atualização de workflows</button>
     </aside>
 
     <main class="main-area">
@@ -490,6 +496,19 @@
         <input class="search-input" id="search-manutencao" placeholder="Filtrar cliente por nome ou servidor..." oninput="renderManutencao()">
         <div id="content-manutencao"></div>
       </section>
+
+      <section class="content" id="section-atualizacao" style="display:none">
+        <div class="embedded-card">
+          <div class="embedded-header">
+            <div class="embedded-title">Atualização Completa de Workflow n8n</div>
+            <button class="copy-key-btn" id="btn-open-atualizacao" onclick="openWorkflowUpdateInNewTab()" disabled>Abrir em nova aba</button>
+          </div>
+          <iframe id="workflow-update-frame" class="embedded-frame" title="Atualização de workflows"></iframe>
+          <div id="workflow-update-empty" class="embedded-empty" style="display:none;">
+            URL do sistema de atualização não configurada. Defina <code>WORKFLOW_UPDATE_URL</code> no ambiente.
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -510,6 +529,7 @@
     let ownerUsersPromise = null;
     let ownerUsersFiltered = [];
     let addCredentialTargetUrl = '';
+    let workflowUpdateUrl = '';
 
     function esc(s) {
       return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -540,6 +560,7 @@
       document.getElementById('section-hosting').style.display = section === 'hosting' ? '' : 'none';
       document.getElementById('section-erros').style.display = section === 'erros' ? '' : 'none';
       document.getElementById('section-manutencao').style.display = section === 'manutencao' ? '' : 'none';
+      document.getElementById('section-atualizacao').style.display = section === 'atualizacao' ? '' : 'none';
 
       if (section === 'estrutura') {
         document.getElementById('sub-header').textContent = 'Grupo Síntese Digital · Estrutura de clientes ativos';
@@ -550,9 +571,52 @@
       } else if (section === 'manutencao') {
         document.getElementById('sub-header').textContent = 'Grupo Síntese Digital · Manutenção de clientes';
         loadClients();
+      } else if (section === 'atualizacao') {
+        document.getElementById('sub-header').textContent = 'Grupo Síntese Digital · Atualização completa de workflows';
+        ensureWorkflowUpdateEmbedded();
       } else {
         document.getElementById('sub-header').textContent = errorSubHeader;
       }
+    }
+
+    async function loadWorkflowUpdateUrl() {
+      try {
+        const res = await fetch('/api/workflow-update-url');
+        const data = await res.json();
+        workflowUpdateUrl = String(data?.url || '').trim();
+      } catch {
+        workflowUpdateUrl = '';
+      }
+    }
+
+    async function ensureWorkflowUpdateEmbedded() {
+      if (!workflowUpdateUrl) {
+        await loadWorkflowUpdateUrl();
+      }
+
+      const frame = document.getElementById('workflow-update-frame');
+      const empty = document.getElementById('workflow-update-empty');
+      const btn = document.getElementById('btn-open-atualizacao');
+      if (!frame || !empty || !btn) return;
+
+      if (!workflowUpdateUrl) {
+        frame.style.display = 'none';
+        empty.style.display = '';
+        btn.disabled = true;
+        return;
+      }
+
+      frame.style.display = '';
+      empty.style.display = 'none';
+      btn.disabled = false;
+      if (frame.src !== workflowUpdateUrl) {
+        frame.src = workflowUpdateUrl;
+      }
+    }
+
+    function openWorkflowUpdateInNewTab() {
+      if (!workflowUpdateUrl) return;
+      window.open(workflowUpdateUrl, '_blank', 'noopener,noreferrer');
     }
 
     function switchTab(tab, el) {
@@ -1507,6 +1571,7 @@
     // ── Init ──────────────────────────────────────────────────────────────────
     loadReport();
     loadClients();
+    loadWorkflowUpdateUrl();
     switchMainSection('estrutura', document.getElementById('menu-estrutura'));
     const infraCostInput = document.getElementById('infra-server-cost');
     if (infraCostInput) infraCostInput.value = String(infraServerMonthlyCost);
