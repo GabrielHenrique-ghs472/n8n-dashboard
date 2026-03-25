@@ -288,8 +288,6 @@
     .native-panel p { color:#8a8a8a; font-size:13px; line-height:1.55; }
     .native-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
     .embedded-card { background:#080808; border:1px solid #282828; border-radius:12px; overflow:hidden; margin-top:10px; }
-    .embedded-header { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-bottom:1px solid #232323; }
-    .embedded-title { color:#9a9a9a; font-size:11px; text-transform:uppercase; letter-spacing:0.7px; }
     .embedded-frame { width:100%; min-height:860px; border:0; background:#000; display:block; }
     .embedded-empty { padding:16px; color:#a3a3a3; font-size:12px; }
     .embedded-empty code { font-family:'SF Mono', Menlo, Consolas, monospace; color:#ececec; }
@@ -502,25 +500,7 @@
       </section>
 
       <section class="content" id="section-atualizacao" style="display:none">
-        <div class="summary">
-          <div class="card orange">
-            <div class="label">Clientes Cadastrados</div>
-            <div class="value" id="atualizacao-clientes">—</div>
-          </div>
-          <div class="card blue">
-            <div class="label">Servidores Mapeados</div>
-            <div class="value" id="atualizacao-servidores">—</div>
-          </div>
-          <div class="card green">
-            <div class="label">Servidores Internos</div>
-            <div class="value" id="atualizacao-internos">—</div>
-          </div>
-        </div>
         <div class="embedded-card">
-          <div class="embedded-header">
-            <div class="embedded-title">Atualização Completa de Workflow n8n</div>
-            <button class="copy-key-btn" id="btn-open-atualizacao" onclick="openWorkflowUpdateInNewTab()" disabled>Abrir em nova aba</button>
-          </div>
           <iframe id="workflow-update-frame" class="embedded-frame" title="Atualização de workflows"></iframe>
           <div id="workflow-update-empty" class="embedded-empty" style="display:none">
             URL do sistema de atualização não configurada. Defina <code>WORKFLOW_UPDATE_URL</code> no ambiente.
@@ -600,10 +580,7 @@
     }
 
     function renderAtualizacao() {
-      const clients = getClientsArray();
-      document.getElementById('atualizacao-clientes').textContent = clients.length;
-      document.getElementById('atualizacao-servidores').textContent = getInfraServers().length;
-      document.getElementById('atualizacao-internos').textContent = getHostingServers().length;
+      // Sessão de atualização sem cards de resumo.
     }
 
     async function loadWorkflowUpdateUrl() {
