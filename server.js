@@ -5,14 +5,22 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { createClient } = require('@supabase/supabase-js');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
-const supabaseDatabase = createClient(
-  process.env.DATABASE_URL || process.env.SUPABASE_URL,
-  process.env.DATABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_KEY
-);
+const hasPrimarySupabase =
+  !!process.env.SUPABASE_URL && !!process.env.SUPABASE_SERVICE_KEY;
+const hasDatabaseSupabase =
+  !!(process.env.DATABASE_URL || process.env.SUPABASE_URL) &&
+  !!(process.env.DATABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_KEY);
+
+const supabase = hasPrimarySupabase
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY)
+  : null;
+
+const supabaseDatabase = hasDatabaseSupabase
+  ? createClient(
+      process.env.DATABASE_URL || process.env.SUPABASE_URL,
+      process.env.DATABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_KEY
+    )
+  : null;
 
 const PORT = process.env.PORT || process.env.DASHBOARD_PORT || 3456;
 const REPORT_FILE = path.join(__dirname, 'report.json');
@@ -21,6 +29,15 @@ const DUPLICACAO_WEBHOOK_URL = 'https://webhooksintese.gruposintesedigital.com/w
 
 let refreshing = false;
 let syncing = false;
+
+function ensureConfigured(res, client, missingKeys) {
+  if (client) return true;
+  res.writeHead(500, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({
+    error: `Configuração ausente no ambiente: ${missingKeys.join(', ')}`,
+  }));
+  return false;
+}
 
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
@@ -134,6 +151,7 @@ const server = http.createServer((req, res) => {
 
   // Lista todos os clientes do banco
   if (req.method === 'GET' && url.pathname === '/api/clients') {
+    if (!ensureConfigured(res, supabase, ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY'])) return;
     supabase
       .from('mcp_clientes')
       .select('id, nome, n8n_url, api_key, AutoSintese, servidor_proprio, churn, created_at')
@@ -151,6 +169,7 @@ const server = http.createServer((req, res) => {
 
   // Lista owners do projeto Database (users.role = owner)
   if (req.method === 'GET' && url.pathname === '/api/owner-users') {
+    if (!ensureConfigured(res, supabaseDatabase, ['DATABASE_URL', 'DATABASE_SERVICE_KEY'])) return;
     const search = (url.searchParams.get('q') || '').trim().toLowerCase();
     (async () => {
       const { data, error } = await supabaseDatabase
@@ -188,6 +207,7 @@ const server = http.createServer((req, res) => {
 
   // Envia payload de duplicação para o webhook n8n
   if (req.method === 'POST' && url.pathname === '/api/duplicacao') {
+    if (!ensureConfigured(res, supabase, ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY'])) return;
     readJsonBody(req)
       .then(async body => {
         const payload = {
@@ -289,6 +309,7 @@ const server = http.createServer((req, res) => {
 
   // Atualiza flags de manutenção do cliente
   if (req.method === 'PATCH' && /^\/api\/clients\/[^/]+$/.test(url.pathname)) {
+    if (!ensureConfigured(res, supabase, ['SUPABASE_URL', 'SUPABASE_SERVICE_KEY'])) return;
     const clientId = decodeURIComponent(url.pathname.split('/').pop());
     readJsonBody(req)
       .then(async body => {
