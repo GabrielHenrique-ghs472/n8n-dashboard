@@ -3,7 +3,6 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
-const { sincronizarClientes } = require('./sync-clients');
 const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(
