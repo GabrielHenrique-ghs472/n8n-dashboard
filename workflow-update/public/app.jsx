@@ -431,6 +431,12 @@ function App() {
       return;
     }
 
+    const targetServerUrl = normalizeServerUrl(selectedTargetClient?.n8n_url);
+    let targetTab = null;
+    if (targetServerUrl) {
+      targetTab = window.open("", "_blank", "noopener,noreferrer");
+    }
+
     setLoading(true);
     setBatchResults([]);
     setStatus({
@@ -475,9 +481,11 @@ function App() {
       }
 
       setBatchResults(results);
-      const targetServerUrl = normalizeServerUrl(selectedTargetClient?.n8n_url);
       let openedTargetServer = false;
-      if (targetServerUrl) {
+      if (targetServerUrl && targetTab && !targetTab.closed) {
+        targetTab.location.href = targetServerUrl;
+        openedTargetServer = true;
+      } else if (targetServerUrl) {
         const opened = window.open(targetServerUrl, "_blank", "noopener,noreferrer");
         openedTargetServer = Boolean(opened);
       }
@@ -490,6 +498,9 @@ function App() {
           : `Lote concluído com sucesso. Atualizados: ${results.length} workflow(s).`,
       });
     } catch (error) {
+      if (targetTab && !targetTab.closed) {
+        targetTab.close();
+      }
       setStatus({ type: "error", message: error.message });
     } finally {
       setLoading(false);
