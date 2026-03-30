@@ -2,7 +2,7 @@ const { useEffect, useMemo, useRef, useState } = React;
 
 const WORKFLOW_NODE_RULES = [
   {
-    workflowNameIncludes: "trativa de mensagem",
+    workflowNameIncludes: "tratativa",
     nodeNames: ["Webhook1"],
     description: "Node mantido exatamente como origem",
   },

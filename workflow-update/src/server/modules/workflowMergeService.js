@@ -8,7 +8,7 @@ function deepClone(value) {
 
 const ORIGIN_NODE_OVERRIDE_RULES = [
   {
-    workflowNameIncludes: "trativa de mensagem",
+    workflowNameIncludes: "tratativa",
     nodeNames: ["Webhook1"],
   },
   {
