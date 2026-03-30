@@ -30,6 +30,18 @@ const BASE_SINTESE_TEMPLATE_RULES = [
   { key: "retorno", contains: "chamada de retorno" },
 ];
 
+const QUICK_LINK_KEYWORDS = [
+  { key: "tratativa", sourceTerms: ["tratativa", "trativa"], targetTerms: ["tratativa", "trativa"] },
+  { key: "buffer", sourceTerms: ["buffer"], targetTerms: ["buffer"] },
+  { key: "decisorio", sourceTerms: ["decisorio"], targetTerms: ["decisorio"] },
+  { key: "recepcao", sourceTerms: ["recepcao"], targetTerms: ["recepcao"] },
+  { key: "gerador", sourceTerms: ["gerador"], targetTerms: ["gerador"] },
+  { key: "tools", sourceTerms: ["tools"], targetTerms: ["tools"] },
+  { key: "envio", sourceTerms: ["envio"], targetTerms: ["envio"] },
+  { key: "follow", sourceTerms: ["follow"], targetTerms: ["follow"] },
+  { key: "chamada", sourceTerms: ["chamada"], targetTerms: ["chamada"] },
+];
+
 function normalizeLoose(value) {
   return String(value || "")
     .normalize("NFD")
@@ -326,6 +338,80 @@ function App() {
       { sourceWorkflowId: linkSourceWorkflowId, targetWorkflowId: linkTargetWorkflowId },
     ]);
     setStatus({ type: "success", message: "Vínculo adicionado." });
+  }
+
+  function applyQuickWorkflowLinks() {
+    if (selectedSourceWorkflowIds.length === 0 || selectedTargetWorkflowIds.length === 0) {
+      setStatus({
+        type: "error",
+        message: "Selecione workflows de origem e destino antes da vinculação rápida.",
+      });
+      return;
+    }
+
+    const sourceCandidates = selectedSourceWorkflowIds.map((id) => ({
+      id: String(id),
+      name: sourceWorkflowMap.get(String(id)) || String(id),
+      normalized: normalizeLoose(sourceWorkflowMap.get(String(id)) || String(id)),
+    }));
+    const targetCandidates = selectedTargetWorkflowIds.map((id) => ({
+      id: String(id),
+      name: targetWorkflowMap.get(String(id)) || String(id),
+      normalized: normalizeLoose(targetWorkflowMap.get(String(id)) || String(id)),
+    }));
+
+    const usedSource = new Set();
+    const usedTarget = new Set();
+    const links = [];
+    const missing = [];
+
+    for (const rule of QUICK_LINK_KEYWORDS) {
+      const source = sourceCandidates.find((item) => {
+        if (usedSource.has(item.id)) return false;
+        return rule.sourceTerms.some((term) => item.normalized.includes(normalizeLoose(term)));
+      });
+      const target = targetCandidates.find((item) => {
+        if (usedTarget.has(item.id)) return false;
+        return rule.targetTerms.some((term) => item.normalized.includes(normalizeLoose(term)));
+      });
+
+      if (!source || !target) {
+        missing.push(rule.key);
+        continue;
+      }
+
+      usedSource.add(source.id);
+      usedTarget.add(target.id);
+      links.push({
+        sourceWorkflowId: source.id,
+        targetWorkflowId: target.id,
+      });
+    }
+
+    setWorkflowLinks(links);
+    setLinkSourceWorkflowId("");
+    setLinkTargetWorkflowId("");
+
+    if (links.length === 0) {
+      setStatus({
+        type: "error",
+        message: "Nenhum vínculo automático foi encontrado pelos padrões de nome.",
+      });
+      return;
+    }
+
+    if (missing.length > 0) {
+      setStatus({
+        type: "error",
+        message: `Vinculação rápida parcial: ${links.length}/${QUICK_LINK_KEYWORDS.length}. Não encontrados: ${missing.join(", ")}.`,
+      });
+      return;
+    }
+
+    setStatus({
+      type: "success",
+      message: `Vinculação rápida concluída com sucesso: ${links.length} vínculo(s).`,
+    });
   }
 
   async function saveFullWorkflowBatch() {
@@ -800,6 +886,13 @@ function App() {
         <div className="row" style={{ marginTop: "10px" }}>
           <button type="button" className="primary" onClick={addWorkflowLink} disabled={!linkSourceWorkflowId || !linkTargetWorkflowId}>
             Adicionar vínculo
+          </button>
+          <button
+            type="button"
+            onClick={applyQuickWorkflowLinks}
+            disabled={selectedSourceWorkflowIds.length === 0 || selectedTargetWorkflowIds.length === 0}
+          >
+            Vinculação rápida
           </button>
           <button type="button" onClick={() => setWorkflowLinks([])} disabled={workflowLinks.length === 0}>
             Limpar vínculos
