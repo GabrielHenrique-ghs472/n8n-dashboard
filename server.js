@@ -227,6 +227,30 @@ function discoverWorkflowScriptTypes(workflow) {
 
 function collectWorkflowScriptItems(workflow, selectedScriptName) {
   const nodes = Array.isArray(workflow?.nodes) ? workflow.nodes : [];
+  const nodeOrder = ['Dados', 'Dados2', 'Dados4', 'Dados9', 'Dados8', 'Dados5', 'Dados7'];
+  const nodeRank = new Map(nodeOrder.map((name, idx) => [String(name).toLowerCase(), idx]));
+  const connections = workflow?.connections && typeof workflow.connections === 'object'
+    ? workflow.connections
+    : {};
+
+  function getNodeOrderRank(nodeName) {
+    const rank = nodeRank.get(String(nodeName || '').toLowerCase());
+    return rank === undefined ? 9999 : rank;
+  }
+
+  function getAgentNodeName(sourceNodeName) {
+    const conn = connections?.[sourceNodeName];
+    const main = Array.isArray(conn?.main) ? conn.main : [];
+    for (const branch of main) {
+      if (!Array.isArray(branch)) continue;
+      for (const edge of branch) {
+        const target = String(edge?.node || '').trim();
+        if (target) return target;
+      }
+    }
+    return '';
+  }
+
   const items = [];
   for (const node of nodes) {
     if (!isEligibleScriptNode(node)) continue;
@@ -236,6 +260,7 @@ function collectWorkflowScriptItems(workflow, selectedScriptName) {
         itemId: `${node.id}::${assignment.name}::${assignment.mode}::${assignment.index}`,
         nodeId: node.id,
         nodeName: node.name,
+        agentNodeName: getAgentNodeName(node.name),
         assignmentName: assignment.name,
         originalValue: String(assignment.value ?? ''),
         locator: { mode: assignment.mode, index: assignment.index },
@@ -243,7 +268,11 @@ function collectWorkflowScriptItems(workflow, selectedScriptName) {
     }
   }
 
-  return items.sort((a, b) => String(a.nodeName).localeCompare(String(b.nodeName), 'pt-BR'));
+  return items.sort((a, b) => {
+    const rankDiff = getNodeOrderRank(a.nodeName) - getNodeOrderRank(b.nodeName);
+    if (rankDiff !== 0) return rankDiff;
+    return String(a.nodeName).localeCompare(String(b.nodeName), 'pt-BR');
+  });
 }
 
 function applyScriptEditsToWorkflow(workflow, selectedScriptName, edits) {
@@ -274,6 +303,7 @@ function applyScriptEditsToWorkflow(workflow, selectedScriptName, edits) {
       itemId: source.itemId,
       nodeId: source.nodeId,
       nodeName: source.nodeName,
+      agentNodeName: source.agentNodeName || '',
       assignmentName: source.assignmentName,
       before: source.originalValue,
       after: nextValue,
@@ -741,6 +771,7 @@ const server = http.createServer((req, res) => {
         changes: changedItems.map(item => ({
           itemId: item.itemId,
           nodeName: item.nodeName,
+          agentNodeName: item.agentNodeName || '',
           assignmentName: item.assignmentName,
           before: item.before,
           after: item.after,

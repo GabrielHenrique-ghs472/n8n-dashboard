@@ -491,6 +491,7 @@
         <div class="script-modal-toolbar">
           <span id="script-modal-progress" class="kpi">Item 0/0</span>
           <span id="script-modal-node" class="kpi">Node: —</span>
+          <span id="script-modal-agent" class="kpi">Agente: —</span>
           <span id="script-modal-field" class="kpi">Campo: —</span>
         </div>
         <div class="script-modal-editor-stack">
@@ -1120,14 +1121,16 @@
       const textarea = document.getElementById('script-modal-textarea');
       const progress = document.getElementById('script-modal-progress');
       const node = document.getElementById('script-modal-node');
+      const agent = document.getElementById('script-modal-agent');
       const field = document.getElementById('script-modal-field');
       const meta = document.getElementById('script-modal-meta');
-      if (!current || !textarea || !progress || !node || !field || !meta) return;
+      if (!current || !textarea || !progress || !node || !field || !meta || !agent) return;
 
       progress.textContent = `Item ${scriptUpdateState.queueIndex + 1}/${scriptUpdateState.queue.length}`;
       node.textContent = `Node: ${current.nodeName || '-'}`;
+      agent.textContent = `Agente: ${current.agentNodeName || '-'}`;
       field.textContent = `Campo: ${formatScriptTypeDisplayName(current.assignmentName || '-')}`;
-      meta.textContent = `${formatScriptTypeDisplayName(current.scriptName || '-')} · ${current.nodeName || '-'}`;
+      meta.textContent = `${formatScriptTypeDisplayName(current.scriptName || '-')} · ${current.nodeName || '-'}${current.agentNodeName ? ` → ${current.agentNodeName}` : ''}`;
       textarea.value = Object.prototype.hasOwnProperty.call(scriptUpdateState.drafts, current.itemId)
         ? scriptUpdateState.drafts[current.itemId]
         : current.originalValue;
@@ -1231,7 +1234,7 @@
           return `<div class="script-diff-line ${cls}">${esc(prefix + ' ' + String(line.value || ''))}</div>`;
         }).join('');
         return `<div class="script-review-item">
-          <div class="script-review-head">${esc(formatScriptTypeDisplayName(change.scriptName))} · ${esc(change.nodeName || '-')} · ${esc(formatScriptTypeDisplayName(change.assignmentName || '-'))}</div>
+          <div class="script-review-head">${esc(formatScriptTypeDisplayName(change.scriptName))} · ${esc(change.nodeName || '-')} · ${esc(change.agentNodeName || '-')} · ${esc(formatScriptTypeDisplayName(change.assignmentName || '-'))}</div>
           <div class="script-review-body">${linesHtml}</div>
         </div>`;
       }).join('');
