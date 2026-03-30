@@ -301,11 +301,7 @@ export function prepareWorkflowForTarget(sourceWorkflow, targetWorkflow, options
       } else {
         delete sourceNode.credentials;
       }
-      if (Array.isArray(targetNode?.position)) {
-        sourceNode.position = [...targetNode.position];
-      } else {
-        delete sourceNode.position;
-      }
+      // Posição deve permanecer como a origem para evitar deslocamento visual.
       continue;
     }
 
@@ -329,10 +325,7 @@ export function prepareWorkflowForTarget(sourceWorkflow, targetWorkflow, options
       sourceCredentialsFallbackUsed += remap.sourceFallbackCount;
     }
 
-    if (Array.isArray(targetNode?.position)) {
-      sourceNode.position = [...targetNode.position];
-      positionPreserved += 1;
-    }
+    // Posição deve permanecer como a origem para evitar deslocamento visual.
   }
 
   return {
