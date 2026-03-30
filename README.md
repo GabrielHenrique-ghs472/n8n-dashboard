@@ -6,12 +6,14 @@ Dashboard operacional para:
 - Manutenção de flags de cliente
 - Fluxo de duplicação de credenciais
 - Módulo interno de atualização de workflows
+- Módulo nativo de atualização de scripts
 
 ## Estrutura do projeto
 
 - Front principal: `index.html`
 - Backend principal: `server.js`
 - Módulo interno de atualização: `workflow-update/`
+- Atualização de scripts (nativa): seção + JS em `index.html` e rotas em `server.js`
 - Jobs agendados: `.github/workflows/scheduled-actions.yml`
 
 Documentação de contexto:
