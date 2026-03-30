@@ -302,6 +302,30 @@
     .script-editor-text { width:100%; min-height:160px; resize:vertical; border:1px solid #2a2a2a; border-radius:8px; background:#050505; color:#e8e8e8; padding:10px; font-size:12px; font-family:'SF Mono', Menlo, Consolas, monospace; }
     .script-editor-text:focus { outline:none; border-color:#434343; }
     .script-modal-toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+    .script-modal-layout { display:grid; grid-template-columns: 270px 1fr; gap:12px; align-items:start; }
+    .script-modal-sidebar { border:1px solid #1f1f1f; border-radius:8px; background:#070707; padding:10px; }
+    .script-sidebar-title { font-size:11px; color:#808080; text-transform:uppercase; letter-spacing:.7px; margin-bottom:8px; }
+    .script-sidebar-controls { display:grid; gap:8px; margin-bottom:10px; }
+    .script-shortcut-checks { display:flex; gap:10px; flex-wrap:wrap; }
+    .script-shortcut-checks label { display:inline-flex; gap:6px; align-items:center; font-size:12px; color:#bdbdbd; }
+    .script-shortcut-search { display:flex; gap:6px; }
+    .script-shortcut-search input {
+      flex:1;
+      border:1px solid #2a2a2a;
+      border-radius:6px;
+      background:#050505;
+      color:#e8e8e8;
+      padding:7px 8px;
+      font-size:12px;
+      outline:none;
+    }
+    .script-shortcut-search input:focus { border-color:#434343; }
+    .script-shortcut-list { max-height:420px; overflow:auto; border:1px solid #1b1b1b; border-radius:8px; background:#050505; }
+    .script-shortcut-item { display:block; width:100%; text-align:left; border:none; border-bottom:1px solid #141414; background:transparent; color:#c7c7c7; padding:8px 9px; font-size:12px; cursor:pointer; }
+    .script-shortcut-item:hover { background:#101010; }
+    .script-shortcut-item:last-child { border-bottom:none; }
+    .script-shortcut-item .kind { display:inline-block; font-size:10px; color:#7b7b7b; margin-right:6px; text-transform:uppercase; }
+    .script-shortcut-empty { padding:10px; color:#666; font-size:12px; }
     .script-modal-editor-stack {
       position: relative;
       border: 1px solid #2a2a2a;
@@ -374,6 +398,8 @@
       .content { padding: 16px; }
       .header { padding: 12px 16px; }
       .script-update-grid { grid-template-columns: 1fr; }
+      .script-modal-layout { grid-template-columns: 1fr; }
+      .script-shortcut-list { max-height:220px; }
     }
   </style>
 </head>
@@ -488,9 +514,27 @@
       </div>
 
       <div id="script-modal-editor-step">
-        <div class="script-modal-editor-stack">
-          <pre id="script-modal-highlight" class="script-modal-highlight"></pre>
-          <textarea id="script-modal-textarea" class="script-modal-textarea" oninput="onScriptModalInput()" onscroll="onScriptModalScroll()" spellcheck="false"></textarea>
+        <div class="script-modal-layout">
+          <aside class="script-modal-sidebar">
+            <div class="script-sidebar-title">Atalhos</div>
+            <div class="script-sidebar-controls">
+              <div class="script-shortcut-checks">
+                <label><input id="script-shortcuts-h1" type="checkbox" checked onchange="toggleScriptShortcutLevel('h1', this.checked)"> Títulos (#)</label>
+                <label><input id="script-shortcuts-h2" type="checkbox" checked onchange="toggleScriptShortcutLevel('h2', this.checked)"> Subtítulos (##)</label>
+              </div>
+              <div class="script-shortcut-search">
+                <input id="script-shortcuts-search" type="text" placeholder="Buscar texto no script..." oninput="onScriptShortcutSearchInput(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();scriptShortcutSearchNext();}">
+                <button class="copy-key-btn" type="button" onclick="scriptShortcutSearchNext()">Buscar</button>
+              </div>
+            </div>
+            <div id="script-shortcuts-list" class="script-shortcut-list">
+              <div class="script-shortcut-empty">Nenhum atalho disponível.</div>
+            </div>
+          </aside>
+          <div class="script-modal-editor-stack">
+            <pre id="script-modal-highlight" class="script-modal-highlight"></pre>
+            <textarea id="script-modal-textarea" class="script-modal-textarea" oninput="onScriptModalInput()" onscroll="onScriptModalScroll()" spellcheck="false"></textarea>
+          </div>
         </div>
         <div class="modal-actions">
           <button id="script-modal-prev-btn" class="btn btn-primary" onclick="scriptModalPrev()">Anterior</button>
@@ -729,6 +773,11 @@
       queue: [],
       queueIndex: 0,
       reviewCache: [],
+      shortcutShowH1: true,
+      shortcutShowH2: true,
+      shortcutSearch: '',
+      shortcutSearchOffsets: [],
+      shortcutSearchCursor: -1,
     };
 
     function esc(s) {
@@ -1070,6 +1119,7 @@
         scriptUpdateState.drafts[current.itemId] = textarea.value;
       }
       renderScriptModalHighlight();
+      renderScriptShortcuts();
     }
 
     function onScriptModalScroll() {
@@ -1078,6 +1128,129 @@
       if (!textarea || !highlight) return;
       highlight.scrollTop = textarea.scrollTop;
       highlight.scrollLeft = textarea.scrollLeft;
+    }
+
+    function toggleScriptShortcutLevel(level, checked) {
+      if (level === 'h1') scriptUpdateState.shortcutShowH1 = !!checked;
+      if (level === 'h2') scriptUpdateState.shortcutShowH2 = !!checked;
+      renderScriptShortcuts();
+    }
+
+    function onScriptShortcutSearchInput(value) {
+      scriptUpdateState.shortcutSearch = String(value || '');
+      scriptUpdateState.shortcutSearchCursor = -1;
+      renderScriptShortcuts();
+    }
+
+    function getScriptHeadings(text) {
+      const src = String(text || '');
+      const lines = src.split('\n');
+      const items = [];
+      let offset = 0;
+      for (let i = 0; i < lines.length; i += 1) {
+        const line = lines[i];
+        const match = line.match(/^\s*(#{1,2})\s+(.+)$/);
+        if (match) {
+          const level = match[1] === '##' ? 'h2' : 'h1';
+          const label = String(match[2] || '').trim();
+          const lineStart = offset + line.indexOf(match[1]);
+          items.push({ level, label, offset: Math.max(0, lineStart) });
+        }
+        offset += line.length + 1;
+      }
+      return items;
+    }
+
+    function findTextOffsets(text, query) {
+      const src = String(text || '');
+      const needle = String(query || '').trim();
+      if (!needle) return [];
+      const hay = src.toLowerCase();
+      const n = needle.toLowerCase();
+      const offsets = [];
+      let cursor = 0;
+      while (cursor <= hay.length) {
+        const at = hay.indexOf(n, cursor);
+        if (at === -1) break;
+        offsets.push(at);
+        cursor = at + Math.max(1, n.length);
+      }
+      return offsets;
+    }
+
+    function jumpToScriptOffset(offset) {
+      const textarea = document.getElementById('script-modal-textarea');
+      if (!textarea) return;
+      const safeOffset = Math.max(0, Math.min(Number(offset || 0), textarea.value.length));
+      textarea.focus();
+      textarea.setSelectionRange(safeOffset, safeOffset);
+      const before = textarea.value.slice(0, safeOffset);
+      const lineCount = before.split('\n').length - 1;
+      const lineHeight = 17.4;
+      textarea.scrollTop = Math.max(0, lineCount * lineHeight - 80);
+      onScriptModalScroll();
+    }
+
+    function scriptShortcutSearchNext() {
+      const textarea = document.getElementById('script-modal-textarea');
+      if (!textarea) return;
+      const offsets = findTextOffsets(textarea.value, scriptUpdateState.shortcutSearch);
+      scriptUpdateState.shortcutSearchOffsets = offsets;
+      if (!offsets.length) {
+        setScriptModalMessage('Texto não encontrado neste script.', 'error');
+        renderScriptShortcuts();
+        return;
+      }
+      scriptUpdateState.shortcutSearchCursor = (scriptUpdateState.shortcutSearchCursor + 1) % offsets.length;
+      jumpToScriptOffset(offsets[scriptUpdateState.shortcutSearchCursor]);
+      setScriptModalMessage(`Ocorrência ${scriptUpdateState.shortcutSearchCursor + 1}/${offsets.length}.`, 'ok');
+      renderScriptShortcuts();
+    }
+
+    function renderScriptShortcuts() {
+      const container = document.getElementById('script-shortcuts-list');
+      const textarea = document.getElementById('script-modal-textarea');
+      if (!container || !textarea) return;
+
+      const text = textarea.value || '';
+      const headings = getScriptHeadings(text)
+        .filter(item => (item.level === 'h1' ? scriptUpdateState.shortcutShowH1 : scriptUpdateState.shortcutShowH2))
+        .filter(item => {
+          const q = String(scriptUpdateState.shortcutSearch || '').trim().toLowerCase();
+          if (!q) return true;
+          return item.label.toLowerCase().includes(q);
+        });
+
+      const searchOffsets = findTextOffsets(text, scriptUpdateState.shortcutSearch);
+      scriptUpdateState.shortcutSearchOffsets = searchOffsets;
+      if (scriptUpdateState.shortcutSearchCursor >= searchOffsets.length) {
+        scriptUpdateState.shortcutSearchCursor = searchOffsets.length - 1;
+      }
+
+      const headingHtml = headings.map(item => {
+        const encodedOffset = Number(item.offset || 0);
+        const tag = item.level === 'h2' ? '##' : '#';
+        return `<button type="button" class="script-shortcut-item" onclick="jumpToScriptOffset(${encodedOffset})">
+          <span class="kind">${tag}</span>${esc(item.label)}
+        </button>`;
+      }).join('');
+
+      let searchHtml = '';
+      if (String(scriptUpdateState.shortcutSearch || '').trim()) {
+        if (!searchOffsets.length) {
+          searchHtml = '<div class="script-shortcut-empty">Nenhuma ocorrência do texto pesquisado.</div>';
+        } else {
+          searchHtml = searchOffsets.map((offset, idx) => {
+            const active = idx === scriptUpdateState.shortcutSearchCursor ? ' style="background:#101928;"' : '';
+            return `<button type="button" class="script-shortcut-item" ${active} onclick="scriptUpdateState.shortcutSearchCursor=${idx};jumpToScriptOffset(${offset});renderScriptShortcuts();">
+              <span class="kind">TXT</span>Ocorrência ${idx + 1}
+            </button>`;
+          }).join('');
+        }
+      }
+
+      const merged = `${headingHtml}${searchHtml}`;
+      container.innerHTML = merged || '<div class="script-shortcut-empty">Nenhum atalho disponível para este script.</div>';
     }
 
     function setScriptModalMessage(message, type = '') {
@@ -1123,6 +1296,7 @@
       textarea.scrollTop = 0;
       textarea.scrollLeft = 0;
       renderScriptModalHighlight();
+      renderScriptShortcuts();
       updateScriptModalActionButtons();
     }
 
@@ -1173,6 +1347,12 @@
       }
       const modal = document.getElementById('script-update-modal');
       if (modal) modal.style.display = 'flex';
+      const h1 = document.getElementById('script-shortcuts-h1');
+      const h2 = document.getElementById('script-shortcuts-h2');
+      const search = document.getElementById('script-shortcuts-search');
+      if (h1) h1.checked = !!scriptUpdateState.shortcutShowH1;
+      if (h2) h2.checked = !!scriptUpdateState.shortcutShowH2;
+      if (search) search.value = scriptUpdateState.shortcutSearch || '';
       const editor = document.getElementById('script-modal-editor-step');
       const review = document.getElementById('script-modal-review-step');
       if (editor) editor.style.display = '';
