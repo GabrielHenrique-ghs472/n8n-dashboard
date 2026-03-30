@@ -302,7 +302,17 @@
     .script-editor-text { width:100%; min-height:160px; resize:vertical; border:1px solid #2a2a2a; border-radius:8px; background:#050505; color:#e8e8e8; padding:10px; font-size:12px; font-family:'SF Mono', Menlo, Consolas, monospace; }
     .script-editor-text:focus { outline:none; border-color:#434343; }
     .script-modal-toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
-    .script-modal-editor-stack { position:relative; border:1px solid #2a2a2a; border-radius:8px; background:#050505; min-height:380px; overflow:hidden; }
+    .script-modal-editor-stack {
+      position: relative;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      background: #050505;
+      min-height: 260px;
+      height: 380px;
+      max-height: 70vh;
+      resize: vertical;
+      overflow: auto;
+    }
     .script-modal-highlight {
       position:absolute;
       inset:0;
