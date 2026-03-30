@@ -78,6 +78,18 @@ function readRawBody(req) {
   });
 }
 
+function normalizeN8nBaseUrl(raw) {
+  const value = String(raw || '').trim();
+  if (!value) return '';
+  const withProto = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+  try {
+    const parsed = new URL(withProto);
+    return `${parsed.protocol}//${parsed.host}`.replace(/\/+$/, '');
+  } catch {
+    return '';
+  }
+}
+
 function startWorkflowUpdateModule() {
   if (workflowUpdateProcess) return;
 
@@ -292,6 +304,89 @@ const server = http.createServer((req, res) => {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: err.message }));
     });
+    return;
+  }
+
+  // Lista workflows de um servidor específico (URL + API key)
+  if (req.method === 'POST' && url.pathname === '/api/server-workflows/list') {
+    readJsonBody(req)
+      .then(async body => {
+        const baseUrl = normalizeN8nBaseUrl(body?.n8nUrl);
+        const apiKey = String(body?.n8nApiKey || '').trim();
+        if (!baseUrl || !apiKey) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: 'Campos obrigatórios: n8nUrl, n8nApiKey.' }));
+        }
+
+        const upstream = await fetch(`${baseUrl}/api/v1/workflows?limit=250`, {
+          headers: { 'X-N8N-API-KEY': apiKey },
+        });
+        const payload = await upstream.json().catch(() => ({}));
+        if (!upstream.ok) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: `Falha ao listar workflows (HTTP ${upstream.status}).` }));
+        }
+
+        const workflows = Array.isArray(payload?.data) ? payload.data : [];
+        const normalized = workflows
+          .map(w => ({
+            id: String(w?.id || ''),
+            name: String(w?.name || '').trim() || `(sem nome ${String(w?.id || '')})`,
+            active: !!w?.active,
+            updatedAt: w?.updatedAt || null,
+          }))
+          .filter(w => w.id)
+          .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ workflows: normalized }));
+      })
+      .catch(err => {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      });
+    return;
+  }
+
+  // Exclui workflows de um servidor específico (URL + API key)
+  if (req.method === 'POST' && url.pathname === '/api/server-workflows/delete') {
+    readJsonBody(req)
+      .then(async body => {
+        const baseUrl = normalizeN8nBaseUrl(body?.n8nUrl);
+        const apiKey = String(body?.n8nApiKey || '').trim();
+        const workflowIds = Array.isArray(body?.workflowIds) ? body.workflowIds.map(v => String(v || '').trim()).filter(Boolean) : [];
+        if (!baseUrl || !apiKey || !workflowIds.length) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: 'Campos obrigatórios: n8nUrl, n8nApiKey, workflowIds[]' }));
+        }
+
+        const deleted = [];
+        const failed = [];
+
+        for (const workflowId of workflowIds) {
+          try {
+            const upstream = await fetch(`${baseUrl}/api/v1/workflows/${encodeURIComponent(workflowId)}`, {
+              method: 'DELETE',
+              headers: { 'X-N8N-API-KEY': apiKey },
+            });
+            if (!upstream.ok) {
+              const text = await upstream.text().catch(() => '');
+              failed.push({ id: workflowId, error: `HTTP ${upstream.status}${text ? `: ${text}` : ''}` });
+              continue;
+            }
+            deleted.push(workflowId);
+          } catch (e) {
+            failed.push({ id: workflowId, error: e.message });
+          }
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ deleted, failed }));
+      })
+      .catch(err => {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      });
     return;
   }
 

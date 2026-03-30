@@ -368,6 +368,39 @@
     </div>
   </div>
 
+  <div id="workflow-cleanup-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:219; align-items:center; justify-content:center;">
+    <div class="modal-inner" style="max-width:960px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+        <div>
+          <h2 style="font-size:16px; font-weight:600;">Preparar Servidor</h2>
+          <div id="workflow-cleanup-server-label" style="margin-top:4px; color:#5b5b5b; font-size:12px;"></div>
+        </div>
+        <button onclick="closeWorkflowCleanupModal()" style="background:none; border:none; cursor:pointer; font-size:20px;">✕</button>
+      </div>
+
+      <div class="filters-line" style="margin-bottom:10px;">
+        <input id="workflow-cleanup-search" class="search-input" style="margin:0; flex:1;" placeholder="Filtrar workflow por nome..." oninput="renderWorkflowCleanupList()">
+        <button class="copy-key-btn" onclick="selectFilteredWorkflowCleanup()">Selecionar filtrados</button>
+        <button class="copy-key-btn" onclick="selectWorkflowCleanupByClientNames()">Selecionar por cliente</button>
+        <button class="copy-key-btn" onclick="clearWorkflowCleanupSelection()">Limpar seleção</button>
+      </div>
+
+      <div class="kpis" style="margin-bottom:10px;">
+        <span class="kpi">Workflows carregados: <b id="workflow-cleanup-total">0</b></span>
+        <span class="kpi">Selecionados: <b id="workflow-cleanup-selected">0</b></span>
+      </div>
+
+      <div id="workflow-cleanup-list" style="max-height:320px; overflow:auto; border:1px solid #1f1f1f; border-radius:10px; padding:8px;"></div>
+
+      <div class="modal-actions" style="margin-top:12px;">
+        <button class="copy-key-btn" onclick="closeWorkflowCleanupModal()">Cancelar</button>
+        <button class="copy-key-btn" id="btn-delete-selected-workflows" onclick="deleteSelectedServerWorkflows()">Excluir selecionados</button>
+        <button class="btn btn-primary" onclick="continueToAddCredentialFromCleanup()">Continuar para adicionar</button>
+      </div>
+      <div id="workflow-cleanup-message" class="modal-msg"></div>
+    </div>
+  </div>
+
   <header class="header">
     <div>
       <h1>Infraestrutura - Grupo Sintese</h1>
@@ -532,6 +565,10 @@
     let ownerUsersPromise = null;
     let ownerUsersFiltered = [];
     let addCredentialTargetUrl = '';
+    let addCredentialTargetContext = null;
+    let workflowCleanupContext = null;
+    let workflowCleanupList = [];
+    let workflowCleanupSelected = new Set();
     let workflowUpdateUrl = '';
 
     function esc(s) {
@@ -539,6 +576,14 @@
     }
     function setBar(pct) { document.getElementById('loading-bar').style.width = pct + '%'; }
     function formatBRL(v) { return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+    function normalizeLoose(value) {
+      return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+    }
 
     function loadInfraServerMonthlyCost() {
       const raw = localStorage.getItem(INFRA_COST_STORAGE_KEY);
@@ -1047,6 +1092,7 @@
 
       const rows = list.map((s, i) => {
         const clients = s.clients.map(c => `<span class="server-pill">${esc(c.nome)}</span>`).join('');
+        const encodedClients = encodeURIComponent(JSON.stringify(s.clients.map(c => c.nome).filter(Boolean)));
         const uniqueKeys = [...new Set(s.clients.map(c => c.api_key).filter(Boolean))];
         const hasKey = uniqueKeys.length > 0;
         const encodedKey = hasKey ? encodeURIComponent(String(uniqueKeys[0])) : '';
@@ -1105,6 +1151,190 @@
       document.getElementById('add-credential-modal').style.display = 'none';
       setAddCredentialMessage('');
       closeOwnerUsernameDropdown();
+    }
+
+    function setWorkflowCleanupMessage(message, type = '') {
+      const el = document.getElementById('workflow-cleanup-message');
+      if (!el) return;
+      el.textContent = message || '';
+      el.className = `modal-msg${type ? ` ${type}` : ''}`;
+    }
+
+    function closeWorkflowCleanupModal() {
+      document.getElementById('workflow-cleanup-modal').style.display = 'none';
+      workflowCleanupContext = null;
+      workflowCleanupList = [];
+      workflowCleanupSelected = new Set();
+      setWorkflowCleanupMessage('');
+      const search = document.getElementById('workflow-cleanup-search');
+      if (search) search.value = '';
+      const list = document.getElementById('workflow-cleanup-list');
+      if (list) list.innerHTML = '';
+      const total = document.getElementById('workflow-cleanup-total');
+      if (total) total.textContent = '0';
+      const selected = document.getElementById('workflow-cleanup-selected');
+      if (selected) selected.textContent = '0';
+    }
+
+    function updateWorkflowCleanupCounters() {
+      const total = document.getElementById('workflow-cleanup-total');
+      const selected = document.getElementById('workflow-cleanup-selected');
+      if (total) total.textContent = String(workflowCleanupList.length);
+      if (selected) selected.textContent = String(workflowCleanupSelected.size);
+    }
+
+    function getFilteredWorkflowCleanupList() {
+      const q = normalizeLoose(document.getElementById('workflow-cleanup-search')?.value || '');
+      if (!q) return workflowCleanupList;
+      return workflowCleanupList.filter(w => normalizeLoose(w?.name).includes(q));
+    }
+
+    function renderWorkflowCleanupList() {
+      const listEl = document.getElementById('workflow-cleanup-list');
+      if (!listEl) return;
+      const filtered = getFilteredWorkflowCleanupList();
+
+      if (!workflowCleanupList.length) {
+        listEl.innerHTML = '<div class="empty"><p>Nenhum workflow encontrado no servidor.</p></div>';
+        updateWorkflowCleanupCounters();
+        return;
+      }
+
+      if (!filtered.length) {
+        listEl.innerHTML = '<div class="empty"><p>Nenhum workflow corresponde ao filtro.</p></div>';
+        updateWorkflowCleanupCounters();
+        return;
+      }
+
+      const rows = filtered.map((w, idx) => {
+        const wid = String(w.id || '');
+        const checked = workflowCleanupSelected.has(wid) ? 'checked' : '';
+        return `<label class="toggle-line" style="display:flex; justify-content:space-between; border:1px solid #1f1f1f; border-radius:8px; padding:7px 9px; margin-bottom:6px;">
+          <span style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" ${checked} onchange="toggleWorkflowCleanupSelect(decodeURIComponent('${encodeURIComponent(wid)}'), this.checked)">
+            <span style="color:#cfcfcf;">${esc(w.name || `Workflow ${idx + 1}`)}</span>
+          </span>
+          <span style="color:#5f5f5f; font-size:11px;">ID: ${esc(wid)}</span>
+        </label>`;
+      }).join('');
+      listEl.innerHTML = rows;
+      updateWorkflowCleanupCounters();
+    }
+
+    function toggleWorkflowCleanupSelect(id, checked) {
+      const key = String(id || '');
+      if (!key) return;
+      if (checked) workflowCleanupSelected.add(key);
+      else workflowCleanupSelected.delete(key);
+      updateWorkflowCleanupCounters();
+    }
+
+    function selectFilteredWorkflowCleanup() {
+      for (const w of getFilteredWorkflowCleanupList()) {
+        workflowCleanupSelected.add(String(w.id));
+      }
+      renderWorkflowCleanupList();
+    }
+
+    function clearWorkflowCleanupSelection() {
+      workflowCleanupSelected = new Set();
+      renderWorkflowCleanupList();
+    }
+
+    function selectWorkflowCleanupByClientNames() {
+      const clientNames = Array.isArray(workflowCleanupContext?.clientNames) ? workflowCleanupContext.clientNames : [];
+      if (!clientNames.length) {
+        setWorkflowCleanupMessage('Nenhum cliente encontrado para este servidor.', 'error');
+        return;
+      }
+      const normalizedClientNames = clientNames.map(normalizeLoose).filter(Boolean);
+      for (const w of workflowCleanupList) {
+        const workflowName = normalizeLoose(w?.name);
+        if (!workflowName) continue;
+        const matches = normalizedClientNames.some(clientName => workflowName.includes(clientName));
+        if (matches) workflowCleanupSelected.add(String(w.id));
+      }
+      renderWorkflowCleanupList();
+    }
+
+    async function loadServerWorkflowsForCleanup() {
+      if (!workflowCleanupContext?.serverUrl || !workflowCleanupContext?.apiKey) {
+        setWorkflowCleanupMessage('Servidor sem URL ou API key para carregar workflows.', 'error');
+        return;
+      }
+      setWorkflowCleanupMessage('Carregando workflows do servidor...');
+      try {
+        const res = await fetch('/api/server-workflows/list', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            n8nUrl: workflowCleanupContext.serverUrl,
+            n8nApiKey: workflowCleanupContext.apiKey,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || `Falha ao carregar workflows (HTTP ${res.status})`);
+        workflowCleanupList = Array.isArray(data?.workflows) ? data.workflows : [];
+        workflowCleanupSelected = new Set();
+        renderWorkflowCleanupList();
+        setWorkflowCleanupMessage('Workflows carregados com sucesso.', 'ok');
+      } catch (e) {
+        workflowCleanupList = [];
+        workflowCleanupSelected = new Set();
+        renderWorkflowCleanupList();
+        setWorkflowCleanupMessage(`Erro ao carregar workflows: ${e.message}`, 'error');
+      }
+    }
+
+    async function deleteSelectedServerWorkflows() {
+      const btn = document.getElementById('btn-delete-selected-workflows');
+      if (!workflowCleanupContext?.serverUrl || !workflowCleanupContext?.apiKey) {
+        setWorkflowCleanupMessage('Contexto do servidor inválido.', 'error');
+        return;
+      }
+      const ids = [...workflowCleanupSelected];
+      if (!ids.length) {
+        setWorkflowCleanupMessage('Selecione pelo menos um workflow para excluir.', 'error');
+        return;
+      }
+
+      const prev = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Excluindo...';
+      setWorkflowCleanupMessage(`Excluindo ${ids.length} workflow(s)...`);
+
+      try {
+        const res = await fetch('/api/server-workflows/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            n8nUrl: workflowCleanupContext.serverUrl,
+            n8nApiKey: workflowCleanupContext.apiKey,
+            workflowIds: ids,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || `Falha ao excluir workflows (HTTP ${res.status})`);
+
+        const deletedIds = Array.isArray(data?.deleted) ? data.deleted.map(String) : [];
+        if (deletedIds.length) {
+          workflowCleanupList = workflowCleanupList.filter(w => !deletedIds.includes(String(w.id)));
+          for (const id of deletedIds) workflowCleanupSelected.delete(String(id));
+        }
+        renderWorkflowCleanupList();
+
+        const failed = Array.isArray(data?.failed) ? data.failed : [];
+        if (failed.length) {
+          setWorkflowCleanupMessage(`Exclusão parcial: removidos ${deletedIds.length}, falhas ${failed.length}.`, 'error');
+        } else {
+          setWorkflowCleanupMessage(`Exclusão concluída: ${deletedIds.length} workflow(s) removido(s).`, 'ok');
+        }
+      } catch (e) {
+        setWorkflowCleanupMessage(`Erro ao excluir workflows: ${e.message}`, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = prev;
+      }
     }
 
     async function fetchOwnerUsers() {
@@ -1223,12 +1453,12 @@
       return firstLabel.replace(/^(n8n|webhook)/i, '');
     }
 
-    async function openAddCredentialModal(btn) {
-      const encodedKey = btn?.getAttribute('data-apikey') || '';
-      const apiKey = encodedKey ? decodeURIComponent(encodedKey) : '';
-      const serverHost = btn?.getAttribute('data-server-host') || '';
-      const serverUrl = btn?.getAttribute('data-server-url') || '';
+    async function openAddCredentialModalFromContext(ctx) {
+      const apiKey = String(ctx?.apiKey || '').trim();
+      const serverHost = String(ctx?.serverHost || '').trim();
+      const serverUrl = String(ctx?.serverUrl || '').trim();
       const suffix = extractN8nSuffix(serverUrl || serverHost);
+      addCredentialTargetContext = { apiKey, serverHost, serverUrl, clientNames: ctx?.clientNames || [] };
       addCredentialTargetUrl = serverUrl || (serverHost ? `https://${serverHost}` : '');
       const usernameInput = document.getElementById('add-credential-username');
 
@@ -1263,6 +1493,43 @@
       } finally {
         usernameInput.disabled = false;
       }
+    }
+
+    async function openWorkflowCleanupModal(btn) {
+      const encodedKey = btn?.getAttribute('data-apikey') || '';
+      const apiKey = encodedKey ? decodeURIComponent(encodedKey) : '';
+      const serverHost = btn?.getAttribute('data-server-host') || '';
+      const serverUrl = btn?.getAttribute('data-server-url') || '';
+      const encodedClients = btn?.getAttribute('data-server-clients') || '';
+      let clientNames = [];
+      try {
+        clientNames = encodedClients ? JSON.parse(decodeURIComponent(encodedClients)) : [];
+      } catch {
+        clientNames = [];
+      }
+      workflowCleanupContext = {
+        apiKey,
+        serverHost: String(serverHost || ''),
+        serverUrl: String(serverUrl || ''),
+        clientNames: Array.isArray(clientNames) ? clientNames : [],
+      };
+      workflowCleanupList = [];
+      workflowCleanupSelected = new Set();
+      document.getElementById('workflow-cleanup-server-label').textContent = serverHost || serverUrl || 'Servidor';
+      document.getElementById('workflow-cleanup-search').value = '';
+      document.getElementById('workflow-cleanup-modal').style.display = 'flex';
+      renderWorkflowCleanupList();
+      await loadServerWorkflowsForCleanup();
+    }
+
+    async function continueToAddCredentialFromCleanup() {
+      if (!workflowCleanupContext) {
+        setWorkflowCleanupMessage('Contexto do servidor não encontrado.', 'error');
+        return;
+      }
+      const ctx = { ...workflowCleanupContext };
+      closeWorkflowCleanupModal();
+      await openAddCredentialModalFromContext(ctx);
     }
 
     async function sendDuplicacao() {
@@ -1371,7 +1638,7 @@
         </div>`;
         const addCell = `<button
           class="copy-key-btn"
-          ${hasKey ? `data-apikey="${encodedKey}" data-server-host="${esc(s.host)}" data-server-url="${esc(s.url || '')}" onclick="openAddCredentialModal(this)"` : 'disabled'}
+          ${hasKey ? `data-apikey="${encodedKey}" data-server-host="${esc(s.host)}" data-server-url="${esc(s.url || '')}" data-server-clients="${encodedClients}" onclick="openWorkflowCleanupModal(this)"` : 'disabled'}
         >Adicionar</button>`;
 
         return `<tr>
