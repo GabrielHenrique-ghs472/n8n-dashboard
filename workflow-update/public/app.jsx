@@ -203,6 +203,7 @@ function App() {
   const [workflowLinks, setWorkflowLinks] = useState([]);
 
   const [batchResults, setBatchResults] = useState([]);
+  const [batchTargetServerUrl, setBatchTargetServerUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState({ type: "", message: "" });
 
@@ -432,13 +433,10 @@ function App() {
     }
 
     const targetServerUrl = normalizeServerUrl(selectedTargetClient?.n8n_url);
-    let targetTab = null;
-    if (targetServerUrl) {
-      targetTab = window.open("", "_blank", "noopener,noreferrer");
-    }
 
     setLoading(true);
     setBatchResults([]);
+    setBatchTargetServerUrl("");
     setStatus({
       type: "info",
       message: `Atualização em andamento... 0/${workflowLinks.length} workflow(s) processados.`,
@@ -481,26 +479,13 @@ function App() {
       }
 
       setBatchResults(results);
-      let openedTargetServer = false;
-      if (targetServerUrl && targetTab && !targetTab.closed) {
-        targetTab.location.href = targetServerUrl;
-        openedTargetServer = true;
-      } else if (targetServerUrl) {
-        const opened = window.open(targetServerUrl, "_blank", "noopener,noreferrer");
-        openedTargetServer = Boolean(opened);
-      }
+      setBatchTargetServerUrl(targetServerUrl || "");
       setStatus({
         type: "success",
-        message: openedTargetServer
-          ? `Lote concluído com sucesso. Atualizados: ${results.length} workflow(s). Servidor aberto em nova guia.`
-          : targetServerUrl
-          ? `Lote concluído com sucesso. Atualizados: ${results.length} workflow(s). O navegador bloqueou a nova guia.`
-          : `Lote concluído com sucesso. Atualizados: ${results.length} workflow(s).`,
+        message: `Lote concluído com sucesso. Atualizados: ${results.length} workflow(s).`,
       });
     } catch (error) {
-      if (targetTab && !targetTab.closed) {
-        targetTab.close();
-      }
+      setBatchTargetServerUrl("");
       setStatus({ type: "error", message: error.message });
     } finally {
       setLoading(false);
@@ -1033,6 +1018,17 @@ function App() {
       </section>
 
       <p className={`status ${status.type}`}>{status.message}</p>
+      {status.type === "success" && batchResults.length > 0 && batchTargetServerUrl ? (
+        <div style={{ marginTop: "10px" }}>
+          <button
+            type="button"
+            className="primary"
+            onClick={() => window.open(batchTargetServerUrl, "_blank", "noopener,noreferrer")}
+          >
+            Abrir servidor do destino
+          </button>
+        </div>
+      ) : null}
     </main>
   );
 }
