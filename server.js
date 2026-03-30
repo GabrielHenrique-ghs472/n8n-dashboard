@@ -26,7 +26,7 @@ const PORT = process.env.PORT || process.env.DASHBOARD_PORT || 3456;
 const REPORT_FILE = path.join(__dirname, 'report.json');
 const HTML_FILE = path.join(__dirname, 'index.html');
 const DUPLICACAO_WEBHOOK_URL = 'https://webhooksintese.gruposintesedigital.com/webhook/dados-duplicacao';
-const WORKFLOW_UPDATE_URL = process.env.WORKFLOW_UPDATE_URL || '';
+const WORKFLOW_UPDATE_URL = process.env.WORKFLOW_UPDATE_URL || 'http://localhost:3030';
 
 let refreshing = false;
 let syncing = false;
