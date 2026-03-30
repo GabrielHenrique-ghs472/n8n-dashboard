@@ -465,15 +465,27 @@ function App() {
     [selectedTargetWorkflowIds, targetWorkflowMap]
   );
 
-  const selectedLinkTargetName = useMemo(
-    () => targetWorkflowMap.get(String(linkTargetWorkflowId)) || "",
-    [linkTargetWorkflowId, targetWorkflowMap]
-  );
+  const activeRulesByLinkedTarget = useMemo(() => {
+    if (workflowLinks.length === 0) return [];
 
-  const selectedTargetActiveRules = useMemo(
-    () => getActiveRulesForWorkflowName(selectedLinkTargetName),
-    [selectedLinkTargetName]
-  );
+    const seen = new Set();
+    const targets = [];
+
+    for (const link of workflowLinks) {
+      const targetId = String(link.targetWorkflowId || "");
+      if (!targetId || seen.has(targetId)) continue;
+      seen.add(targetId);
+      targets.push(targetId);
+    }
+
+    return targets
+      .map((targetId) => {
+        const targetName = targetWorkflowMap.get(targetId) || targetId;
+        const rules = getActiveRulesForWorkflowName(targetName);
+        return { targetId, targetName, rules };
+      })
+      .filter((item) => item.rules.length > 0);
+  }, [workflowLinks, targetWorkflowMap]);
 
   function applyBaseTemplateSelection() {
     const selectedByRule = new Map();
@@ -786,22 +798,32 @@ function App() {
           </div>
         )}
 
-        {selectedTargetActiveRules.length > 0 ? (
+        {workflowLinks.length > 0 ? (
           <div className="rule-box">
-            <strong>Regras ativas para o destino selecionado</strong>
-            <div className="rule-subtitle">{selectedLinkTargetName}</div>
-            <div className="rule-list">
-              {selectedTargetActiveRules.map((rule, index) => (
-                <div key={`${rule.workflowNameIncludes}-${index}`} className="rule-item">
-                  <span className="rule-when">
-                    Se o nome contiver "{rule.workflowNameIncludes}"
-                  </span>
-                  <span className="rule-then">
-                    {rule.nodeNames.join(", ")} - {rule.description}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <strong>Regras ativas nos vínculos atuais</strong>
+            {activeRulesByLinkedTarget.length > 0 ? (
+              <div className="rule-list">
+                {activeRulesByLinkedTarget.map((targetRuleGroup) => (
+                  <div key={targetRuleGroup.targetId}>
+                    <div className="rule-subtitle">{targetRuleGroup.targetName}</div>
+                    {targetRuleGroup.rules.map((rule, index) => (
+                      <div key={`${targetRuleGroup.targetId}-${rule.workflowNameIncludes}-${index}`} className="rule-item">
+                        <span className="rule-when">
+                          Se o nome contiver "{rule.workflowNameIncludes}"
+                        </span>
+                        <span className="rule-then">
+                          {rule.nodeNames.join(", ")} - {rule.description}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="hint" style={{ marginTop: "8px" }}>
+                Nenhuma regra especial ativa nos workflows de destino vinculados.
+              </div>
+            )}
           </div>
         ) : null}
       </section>

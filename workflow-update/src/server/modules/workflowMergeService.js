@@ -168,7 +168,11 @@ function shouldKeepNodeExactlyFromSource(targetWorkflowName, sourceNodeName) {
       return false;
     }
 
-    return rule.nodeNames.some((nodeName) => normalizeRuleToken(nodeName) === nodeNorm);
+    return rule.nodeNames.some((nodeName) => {
+      const ruleNodeNorm = normalizeRuleToken(nodeName);
+      if (!ruleNodeNorm) return false;
+      return nodeNorm.includes(ruleNodeNorm) || ruleNodeNorm.includes(nodeNorm);
+    });
   });
 }
 
