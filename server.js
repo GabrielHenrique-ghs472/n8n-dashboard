@@ -3,6 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { diffLines } = require('diff');
 const { spawn } = require('child_process');
 const { createClient } = require('@supabase/supabase-js');
 
@@ -291,6 +292,20 @@ function cleanWorkflowForN8nUpdate(workflow) {
   };
   if (workflow?.staticData !== undefined) clean.staticData = workflow.staticData;
   return clean;
+}
+
+function buildScriptLineDiff(before, after) {
+  const chunks = diffLines(String(before ?? ''), String(after ?? ''));
+  const lines = [];
+  for (const chunk of chunks) {
+    const type = chunk.added ? 'add' : chunk.removed ? 'remove' : 'context';
+    const split = String(chunk.value || '').split('\n');
+    const normalized = split[split.length - 1] === '' ? split.slice(0, -1) : split;
+    for (const value of normalized) {
+      lines.push({ type, value });
+    }
+  }
+  return lines;
 }
 
 function filterWorkflowsByClientTag(workflows, clientName) {
@@ -729,6 +744,7 @@ const server = http.createServer((req, res) => {
           assignmentName: item.assignmentName,
           before: item.before,
           after: item.after,
+          diff: buildScriptLineDiff(item.before, item.after),
         })),
       }));
     }).catch(err => {

@@ -301,6 +301,14 @@
     .script-editor-meta { font-size:11px; color:#686868; margin-bottom:8px; }
     .script-editor-text { width:100%; min-height:160px; resize:vertical; border:1px solid #2a2a2a; border-radius:8px; background:#050505; color:#e8e8e8; padding:10px; font-size:12px; font-family:'SF Mono', Menlo, Consolas, monospace; }
     .script-editor-text:focus { outline:none; border-color:#434343; }
+    .script-modal-toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+    .script-review-item { border:1px solid #1f1f1f; border-radius:8px; overflow:hidden; margin-bottom:8px; }
+    .script-review-head { background:#0c0c0c; border-bottom:1px solid #1f1f1f; padding:8px 10px; color:#a8a8a8; font-size:12px; }
+    .script-review-body { font-family:'SF Mono', Menlo, Consolas, monospace; font-size:12px; line-height:1.5; }
+    .script-diff-line { padding:1px 10px; white-space:pre-wrap; word-break:break-word; }
+    .script-diff-add { background:#06162d; color:#8ab4f8; }
+    .script-diff-remove { background:#1f0a0a; color:#f28b82; }
+    .script-diff-context { background:#060606; color:#b6b6b6; }
 
     @media (max-width: 980px) {
       .app-shell { flex-direction: column; min-height: auto; }
@@ -410,6 +418,43 @@
         <button class="btn btn-primary" onclick="continueToAddCredentialFromCleanup()">Continuar para adicionar</button>
       </div>
       <div id="workflow-cleanup-message" class="modal-msg"></div>
+    </div>
+  </div>
+
+  <div id="script-update-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.78); z-index:230; align-items:center; justify-content:center;">
+    <div class="modal-inner" style="max-width:1100px; width:96%;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <div>
+          <h2 style="font-size:17px; font-weight:600;">Atualização de Scripts</h2>
+          <div id="script-modal-meta" style="margin-top:4px; color:#5f5f5f; font-size:12px;">Editor sequencial</div>
+        </div>
+        <button onclick="closeScriptUpdateModal()" style="background:none; border:none; cursor:pointer; font-size:20px;">✕</button>
+      </div>
+
+      <div id="script-modal-editor-step">
+        <div class="script-modal-toolbar">
+          <span id="script-modal-progress" class="kpi">Item 0/0</span>
+          <span id="script-modal-node" class="kpi">Node: —</span>
+          <span id="script-modal-field" class="kpi">Campo: —</span>
+        </div>
+        <textarea id="script-modal-textarea" class="script-editor-text" style="min-height:380px;"></textarea>
+        <div class="modal-actions">
+          <button class="copy-key-btn" onclick="scriptModalPrev()">Anterior</button>
+          <button class="copy-key-btn" onclick="scriptModalNext()">Próximo</button>
+          <button class="btn btn-primary" onclick="scriptModalGoReview()">Ir para revisão</button>
+        </div>
+      </div>
+
+      <div id="script-modal-review-step" style="display:none;">
+        <div id="script-modal-review-summary" style="font-size:13px; color:#b8b8b8; margin-bottom:10px;"></div>
+        <div id="script-modal-review-list" style="max-height:460px; overflow:auto; border:1px solid #1f1f1f; border-radius:10px; padding:8px;"></div>
+        <div class="modal-actions">
+          <button class="copy-key-btn" onclick="scriptModalBackToEditor()">Voltar ao editor</button>
+          <button class="btn btn-primary" onclick="saveScriptUpdateChanges()">Salvar alterações</button>
+        </div>
+      </div>
+
+      <div id="script-modal-message" class="modal-msg"></div>
     </div>
   </div>
 
@@ -586,15 +631,12 @@
         </div>
 
         <div class="card" style="margin-bottom:12px;">
-          <div class="label">Editor de Scripts</div>
-          <div id="script-editor-list" class="script-editor-list">
-            <div class="empty"><p>Nenhum script carregado.</p></div>
-          </div>
+          <div class="label">Fluxo de Edição</div>
+          <p style="color:#8a8a8a; font-size:13px;">Edite script por script em popup sequencial e finalize com revisão em diff (linhas removidas em vermelho e adicionadas em azul).</p>
         </div>
 
         <div class="native-actions">
-          <button class="copy-key-btn" onclick="reviewScriptUpdateChanges()">Revisar alterações</button>
-          <button class="btn btn-primary" onclick="saveScriptUpdateChanges()">Salvar alterações</button>
+          <button class="btn btn-primary" onclick="openScriptUpdateEditorModal()">Abrir editor sequencial</button>
         </div>
         <div id="script-update-message" class="modal-msg" style="margin-top:10px;"></div>
       </section>
@@ -634,6 +676,9 @@
       itemsByScriptName: {},
       drafts: {},
       initialized: false,
+      queue: [],
+      queueIndex: 0,
+      reviewCache: [],
     };
 
     function esc(s) {
@@ -796,40 +841,7 @@
       }).join('');
     }
 
-    function renderScriptEditorItems() {
-      const box = document.getElementById('script-editor-list');
-      if (!box) return;
-      const scriptNames = Object.keys(scriptUpdateState.itemsByScriptName);
-      if (!scriptNames.length) {
-        box.innerHTML = '<div class="empty"><p>Nenhum script carregado.</p></div>';
-        return;
-      }
-
-      const chunks = [];
-      for (const scriptName of scriptNames) {
-        const items = scriptUpdateState.itemsByScriptName[scriptName] || [];
-        chunks.push(`<div class="script-editor-item"><div class="script-editor-title">${esc(scriptName)}</div>`);
-        if (!items.length) {
-          chunks.push('<div class="script-editor-meta">Nenhum item editável encontrado.</div></div>');
-          continue;
-        }
-        for (const item of items) {
-          const itemId = String(item.itemId || '');
-          const encodedItemId = encodeURIComponent(itemId);
-          const draftValue = Object.prototype.hasOwnProperty.call(scriptUpdateState.drafts, itemId)
-            ? scriptUpdateState.drafts[itemId]
-            : item.originalValue;
-          chunks.push(`
-            <div style="margin-bottom:10px;">
-              <div class="script-editor-meta">Node: ${esc(item.nodeName)} · Campo: ${esc(item.assignmentName)}</div>
-              <textarea class="script-editor-text" oninput="updateScriptDraft(decodeURIComponent('${encodedItemId}'), this.value)">${esc(draftValue)}</textarea>
-            </div>
-          `);
-        }
-        chunks.push('</div>');
-      }
-      box.innerHTML = chunks.join('');
-    }
+    function renderScriptEditorItems() {}
 
     async function initScriptUpdateSection() {
       if (scriptUpdateState.initialized) return;
@@ -854,6 +866,9 @@
       scriptUpdateState.selectedScriptNames = new Set();
       scriptUpdateState.itemsByScriptName = {};
       scriptUpdateState.drafts = {};
+      scriptUpdateState.queue = [];
+      scriptUpdateState.queueIndex = 0;
+      scriptUpdateState.reviewCache = [];
       renderScriptUpdateWorkflows();
       renderScriptUpdateTypes();
       renderScriptEditorItems();
@@ -877,6 +892,9 @@
       scriptUpdateState.selectedScriptNames = new Set();
       scriptUpdateState.itemsByScriptName = {};
       scriptUpdateState.drafts = {};
+      scriptUpdateState.queue = [];
+      scriptUpdateState.queueIndex = 0;
+      scriptUpdateState.reviewCache = [];
       renderScriptUpdateTypes();
       renderScriptEditorItems();
       if (!workflowId || !scriptUpdateState.selectedClientId) return;
@@ -910,6 +928,9 @@
 
       scriptUpdateState.itemsByScriptName = {};
       scriptUpdateState.drafts = {};
+      scriptUpdateState.queue = [];
+      scriptUpdateState.queueIndex = 0;
+      scriptUpdateState.reviewCache = [];
       setScriptUpdateMessage('Carregando scripts selecionados...');
       try {
         for (const scriptName of selectedNames) {
@@ -922,7 +943,6 @@
             scriptUpdateState.drafts[item.itemId] = item.originalValue;
           }
         }
-        renderScriptEditorItems();
         const totalItems = Object.values(scriptUpdateState.itemsByScriptName).reduce((acc, items) => acc + items.length, 0);
         setScriptUpdateMessage(`Scripts carregados com sucesso. Itens editáveis: ${totalItems}`, 'ok');
       } catch (error) {
@@ -932,6 +952,148 @@
 
     function updateScriptDraft(itemId, value) {
       scriptUpdateState.drafts[itemId] = value;
+    }
+
+    function setScriptModalMessage(message, type = '') {
+      const el = document.getElementById('script-modal-message');
+      if (!el) return;
+      el.textContent = message || '';
+      el.className = `modal-msg${type ? ` ${type}` : ''}`;
+    }
+
+    function buildScriptQueue() {
+      const queue = [];
+      for (const scriptName of Object.keys(scriptUpdateState.itemsByScriptName)) {
+        const items = scriptUpdateState.itemsByScriptName[scriptName] || [];
+        for (const item of items) {
+          queue.push({ ...item, scriptName });
+        }
+      }
+      scriptUpdateState.queue = queue;
+      scriptUpdateState.queueIndex = 0;
+    }
+
+    function getCurrentScriptQueueItem() {
+      return scriptUpdateState.queue[scriptUpdateState.queueIndex] || null;
+    }
+
+    function saveCurrentModalDraft() {
+      const current = getCurrentScriptQueueItem();
+      const textarea = document.getElementById('script-modal-textarea');
+      if (!current || !textarea) return;
+      scriptUpdateState.drafts[current.itemId] = textarea.value;
+    }
+
+    function renderScriptModalEditor() {
+      const current = getCurrentScriptQueueItem();
+      const textarea = document.getElementById('script-modal-textarea');
+      const progress = document.getElementById('script-modal-progress');
+      const node = document.getElementById('script-modal-node');
+      const field = document.getElementById('script-modal-field');
+      const meta = document.getElementById('script-modal-meta');
+      if (!current || !textarea || !progress || !node || !field || !meta) return;
+
+      progress.textContent = `Item ${scriptUpdateState.queueIndex + 1}/${scriptUpdateState.queue.length}`;
+      node.textContent = `Node: ${current.nodeName || '-'}`;
+      field.textContent = `Campo: ${current.assignmentName || '-'}`;
+      meta.textContent = `${current.scriptName || '-'} · ${current.nodeName || '-'}`;
+      textarea.value = Object.prototype.hasOwnProperty.call(scriptUpdateState.drafts, current.itemId)
+        ? scriptUpdateState.drafts[current.itemId]
+        : current.originalValue;
+    }
+
+    function closeScriptUpdateModal() {
+      const modal = document.getElementById('script-update-modal');
+      if (modal) modal.style.display = 'none';
+      setScriptModalMessage('');
+      const editor = document.getElementById('script-modal-editor-step');
+      const review = document.getElementById('script-modal-review-step');
+      if (editor) editor.style.display = '';
+      if (review) review.style.display = 'none';
+    }
+
+    function openScriptUpdateEditorModal() {
+      if (!Object.keys(scriptUpdateState.itemsByScriptName).length) {
+        setScriptUpdateMessage('Carregue scripts selecionados antes de abrir o editor.', 'error');
+        return;
+      }
+      buildScriptQueue();
+      if (!scriptUpdateState.queue.length) {
+        setScriptUpdateMessage('Nenhum item editável encontrado para abrir no editor.', 'error');
+        return;
+      }
+      const modal = document.getElementById('script-update-modal');
+      if (modal) modal.style.display = 'flex';
+      const editor = document.getElementById('script-modal-editor-step');
+      const review = document.getElementById('script-modal-review-step');
+      if (editor) editor.style.display = '';
+      if (review) review.style.display = 'none';
+      setScriptModalMessage('Edite e avance script por script.', 'ok');
+      renderScriptModalEditor();
+    }
+
+    function scriptModalPrev() {
+      saveCurrentModalDraft();
+      if (scriptUpdateState.queueIndex <= 0) return;
+      scriptUpdateState.queueIndex -= 1;
+      renderScriptModalEditor();
+    }
+
+    function scriptModalNext() {
+      saveCurrentModalDraft();
+      if (scriptUpdateState.queueIndex >= scriptUpdateState.queue.length - 1) return;
+      scriptUpdateState.queueIndex += 1;
+      renderScriptModalEditor();
+    }
+
+    function renderScriptModalReview() {
+      const summary = document.getElementById('script-modal-review-summary');
+      const list = document.getElementById('script-modal-review-list');
+      if (!summary || !list) return;
+
+      const changes = scriptUpdateState.reviewCache || [];
+      if (!changes.length) {
+        summary.textContent = 'Nenhuma alteração detectada.';
+        list.innerHTML = '<div class="empty"><p>Nenhuma diferença encontrada para revisar.</p></div>';
+        return;
+      }
+
+      summary.textContent = `Revisão pronta: ${changes.length} bloco(s) com alteração.`;
+      list.innerHTML = changes.map(change => {
+        const diffLines = Array.isArray(change.diff) ? change.diff : [];
+        const linesHtml = diffLines.map(line => {
+          const cls = line.type === 'add'
+            ? 'script-diff-add'
+            : line.type === 'remove'
+            ? 'script-diff-remove'
+            : 'script-diff-context';
+          const prefix = line.type === 'add' ? '+' : line.type === 'remove' ? '-' : ' ';
+          return `<div class="script-diff-line ${cls}">${esc(prefix + ' ' + String(line.value || ''))}</div>`;
+        }).join('');
+        return `<div class="script-review-item">
+          <div class="script-review-head">${esc(change.scriptName)} · ${esc(change.nodeName || '-')} · ${esc(change.assignmentName || '-')}</div>
+          <div class="script-review-body">${linesHtml}</div>
+        </div>`;
+      }).join('');
+    }
+
+    async function scriptModalGoReview() {
+      saveCurrentModalDraft();
+      await reviewScriptUpdateChanges(true);
+      const editor = document.getElementById('script-modal-editor-step');
+      const review = document.getElementById('script-modal-review-step');
+      if (editor) editor.style.display = 'none';
+      if (review) review.style.display = '';
+      renderScriptModalReview();
+      setScriptModalMessage('Revise as alterações antes de salvar.', 'ok');
+    }
+
+    function scriptModalBackToEditor() {
+      const editor = document.getElementById('script-modal-editor-step');
+      const review = document.getElementById('script-modal-review-step');
+      if (editor) editor.style.display = '';
+      if (review) review.style.display = 'none';
+      renderScriptModalEditor();
     }
 
     function buildScriptEdits(scriptName) {
@@ -944,16 +1106,17 @@
       }));
     }
 
-    async function reviewScriptUpdateChanges() {
+    async function reviewScriptUpdateChanges(silent = false) {
       const scriptNames = Object.keys(scriptUpdateState.itemsByScriptName);
       if (!scriptNames.length) {
-        setScriptUpdateMessage('Carregue scripts para revisar.', 'error');
+        if (!silent) setScriptUpdateMessage('Carregue scripts para revisar.', 'error');
         return;
       }
 
-      setScriptUpdateMessage('Gerando revisão das alterações...');
+      if (!silent) setScriptUpdateMessage('Gerando revisão das alterações...');
       try {
         let changedTotal = 0;
+        const reviewBlocks = [];
         for (const scriptName of scriptNames) {
           const payload = await scriptUpdateApi(
             `/clients/${encodeURIComponent(scriptUpdateState.selectedClientId)}/workflows/${encodeURIComponent(scriptUpdateState.selectedWorkflowId)}/review`,
@@ -966,14 +1129,19 @@
             }
           );
           changedTotal += Number(payload?.changedCount || 0);
+          for (const change of Array.isArray(payload?.changes) ? payload.changes : []) {
+            reviewBlocks.push({ ...change, scriptName });
+          }
         }
+        scriptUpdateState.reviewCache = reviewBlocks;
         if (changedTotal > 0) {
-          setScriptUpdateMessage(`Revisão concluída. Itens com alterações: ${changedTotal}`, 'ok');
+          if (!silent) setScriptUpdateMessage(`Revisão concluída. Itens com alterações: ${changedTotal}`, 'ok');
         } else {
-          setScriptUpdateMessage('Revisão concluída. Nenhuma alteração detectada.', 'error');
+          if (!silent) setScriptUpdateMessage('Revisão concluída. Nenhuma alteração detectada.', 'error');
         }
       } catch (error) {
-        setScriptUpdateMessage(error.message, 'error');
+        if (!silent) setScriptUpdateMessage(error.message, 'error');
+        setScriptModalMessage(error.message, 'error');
       }
     }
 
@@ -985,6 +1153,7 @@
       }
 
       setScriptUpdateMessage('Salvando alterações no n8n...');
+      setScriptModalMessage('Salvando alterações no n8n...');
       try {
         let changedTotal = 0;
         for (const scriptName of scriptNames) {
@@ -1001,8 +1170,11 @@
           changedTotal += Number(payload?.changedCount || 0);
         }
         setScriptUpdateMessage(`Alterações salvas com sucesso. Itens alterados: ${changedTotal}`, 'ok');
+        setScriptModalMessage(`Alterações salvas com sucesso. Itens alterados: ${changedTotal}`, 'ok');
+        closeScriptUpdateModal();
       } catch (error) {
         setScriptUpdateMessage(error.message, 'error');
+        setScriptModalMessage(error.message, 'error');
       }
     }
 
