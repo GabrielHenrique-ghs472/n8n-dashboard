@@ -26,6 +26,7 @@ const PORT = process.env.PORT || process.env.DASHBOARD_PORT || 3456;
 const REPORT_FILE = path.join(__dirname, 'report.json');
 const HTML_FILE = path.join(__dirname, 'index.html');
 const DUPLICACAO_WEBHOOK_URL = 'https://webhooksintese.gruposintesedigital.com/webhook/dados-duplicacao';
+const WORKFLOW_UPDATE_URL = process.env.WORKFLOW_UPDATE_URL || '';
 
 let refreshing = false;
 let syncing = false;
@@ -113,6 +114,12 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/status') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ refreshing, syncing }));
+  }
+
+  // URL do sistema de atualização de workflows (embutido no menu lateral)
+  if (req.method === 'GET' && url.pathname === '/api/workflow-update-url') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ url: WORKFLOW_UPDATE_URL }));
   }
 
   // Sincronizar clientes
