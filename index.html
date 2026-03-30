@@ -302,8 +302,16 @@
     .script-editor-text { width:100%; min-height:160px; resize:vertical; border:1px solid #2a2a2a; border-radius:8px; background:#050505; color:#e8e8e8; padding:10px; font-size:12px; font-family:'SF Mono', Menlo, Consolas, monospace; }
     .script-editor-text:focus { outline:none; border-color:#434343; }
     .script-modal-toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
-    .script-modal-layout { display:grid; grid-template-columns: 270px 1fr; gap:12px; align-items:start; }
-    .script-modal-sidebar { border:1px solid #1f1f1f; border-radius:8px; background:#070707; padding:10px; }
+    .script-modal-layout { display:flex; gap:12px; align-items:flex-start; }
+    .script-modal-sidebar {
+      border:1px solid #1f1f1f;
+      border-radius:8px;
+      background:#070707;
+      padding:10px;
+      width:270px;
+      min-width:230px;
+      flex:0 0 auto;
+    }
     .script-sidebar-title { font-size:11px; color:#808080; text-transform:uppercase; letter-spacing:.7px; margin-bottom:8px; }
     .script-sidebar-controls { display:grid; gap:8px; margin-bottom:10px; }
     .script-shortcut-checks { display:flex; gap:10px; flex-wrap:wrap; }
@@ -336,12 +344,13 @@
       height: 380px;
       max-height: 70vh;
       min-width: 320px;
-      width: 100%;
-      max-width: 100%;
+      width: 760px;
       resize: both;
       overflow: auto;
+      flex: 0 0 auto;
     }
     .script-update-modal-inner {
+      width: 1100px;
       min-width: 760px;
       min-height: 520px;
       max-width: 96vw;
@@ -399,7 +408,9 @@
       .content { padding: 16px; }
       .header { padding: 12px 16px; }
       .script-update-grid { grid-template-columns: 1fr; }
-      .script-modal-layout { grid-template-columns: 1fr; }
+      .script-modal-layout { flex-direction: column; }
+      .script-modal-editor-stack { width: 100%; min-width: 0; }
+      .script-modal-sidebar { width: 100%; min-width: 0; }
       .script-shortcut-list { max-height:220px; }
     }
   </style>
@@ -505,7 +516,7 @@
   </div>
 
   <div id="script-update-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.78); z-index:230; align-items:center; justify-content:center;">
-    <div class="modal-inner script-update-modal-inner" style="max-width:1100px; width:96%;">
+    <div class="modal-inner script-update-modal-inner">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
         <div>
           <h2 style="font-size:17px; font-weight:600;">Atualização de Scripts</h2>
@@ -516,6 +527,10 @@
 
       <div id="script-modal-editor-step">
         <div class="script-modal-layout">
+          <div class="script-modal-editor-stack">
+            <pre id="script-modal-highlight" class="script-modal-highlight"></pre>
+            <textarea id="script-modal-textarea" class="script-modal-textarea" oninput="onScriptModalInput()" onscroll="onScriptModalScroll()" spellcheck="false"></textarea>
+          </div>
           <aside class="script-modal-sidebar">
             <div class="script-sidebar-title">Atalhos</div>
             <div class="script-sidebar-controls">
@@ -532,10 +547,6 @@
               <div class="script-shortcut-empty">Nenhum atalho disponível.</div>
             </div>
           </aside>
-          <div class="script-modal-editor-stack">
-            <pre id="script-modal-highlight" class="script-modal-highlight"></pre>
-            <textarea id="script-modal-textarea" class="script-modal-textarea" oninput="onScriptModalInput()" onscroll="onScriptModalScroll()" spellcheck="false"></textarea>
-          </div>
         </div>
         <div class="modal-actions">
           <button id="script-modal-prev-btn" class="btn btn-primary" onclick="scriptModalPrev()">Anterior</button>
