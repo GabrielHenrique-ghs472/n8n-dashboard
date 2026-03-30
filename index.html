@@ -882,11 +882,26 @@
       box.innerHTML = scriptUpdateState.scriptTypes.map(item => {
         const encoded = encodeURIComponent(item.name);
         const checked = scriptUpdateState.selectedScriptNames.has(item.name) ? 'checked' : '';
+        const displayName = formatScriptTypeDisplayName(item.name);
         return `<label class="script-type-check">
           <input type="checkbox" ${checked} onchange="toggleScriptTypeSelection(decodeURIComponent('${encoded}'), this.checked)">
-          <span>${esc(item.name)} (${item.occurrences})</span>
+          <span>${esc(displayName)} (${item.occurrences})</span>
         </label>`;
       }).join('');
+    }
+
+    function formatScriptTypeDisplayName(rawName) {
+      const value = String(rawName || '');
+      const matches = [...value.matchAll(/\(\s*([^()]+?)\s*\)/g)];
+      if (matches.length) {
+        const cleanedInner = String(matches[matches.length - 1][1] || '').replace(/\s+/g, ' ').trim();
+        if (cleanedInner) return cleanedInner;
+      }
+      return value
+        .replace(/^=\s*/i, '')
+        .replace(/\{\{[^}]*\}\}/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
     }
 
     function renderScriptEditorItems() {}
