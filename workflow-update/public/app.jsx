@@ -427,6 +427,10 @@ function App() {
 
     setLoading(true);
     setBatchResults([]);
+    setStatus({
+      type: "info",
+      message: `Atualização em andamento... 0/${workflowLinks.length} workflow(s) processados.`,
+    });
     try {
       const sourceMap = new Map(sourceWorkflows.map((item) => [String(item.id), item.name]));
       const targetMap = new Map(targetWorkflows.map((item) => [String(item.id), item.name]));
@@ -456,6 +460,11 @@ function App() {
           credentialsPreserved: saveData.preserveStats?.credentialsPreserved || 0,
           credentialsInheritedByType: saveData.preserveStats?.credentialsInheritedByType || 0,
           backupFolder: saveData.backupFolder,
+        });
+
+        setStatus({
+          type: "info",
+          message: `Atualização em andamento... ${results.length}/${workflowLinks.length} workflow(s) processados.`,
         });
       }
 
@@ -970,9 +979,16 @@ function App() {
             className="danger"
             disabled={loading || workflowLinks.length === 0}
           >
-            Atualizar fluxos vinculados
+            {loading ? "Atualizando..." : "Atualizar fluxos vinculados"}
           </button>
         </div>
+
+        {loading ? (
+          <div className="loading-inline" aria-live="polite">
+            <span className="loading-spinner" />
+            Executando atualização dos fluxos. Aguarde...
+          </div>
+        ) : null}
 
         <p className="hint" style={{ marginTop: "10px" }}>
           Regras de preservação continuam ativas: nome/status do destino, credenciais do destino e exceções por nome de workflow/node.

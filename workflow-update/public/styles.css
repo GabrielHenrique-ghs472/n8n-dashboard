@@ -242,9 +242,38 @@ button:disabled {
   color: var(--success);
 }
 
+.status.info {
+  color: var(--warning);
+}
+
 .hint {
   color: #666;
   font-size: 12px;
+}
+
+.loading-inline {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--warning);
+}
+
+.loading-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #3a3a3a;
+  border-top-color: var(--warning);
+  border-radius: 999px;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .code {
