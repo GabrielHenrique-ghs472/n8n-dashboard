@@ -967,17 +967,17 @@
       return Object.values(servers).sort((a, b) => b.clients.length - a.clients.length || a.host.localeCompare(b.host));
     }
 
-    function getHostingClients() {
+    function getHostingClients(includeOwnServers = false) {
       return getClientsArray().filter(c => {
-        const includeByOwnership = includeOwnServersHosting ? true : c.servidor_proprio === false;
+        const includeByOwnership = includeOwnServers ? true : c.servidor_proprio === false;
         const includeByChurn = includeChurnHosting || c.churn !== true;
         return includeByOwnership && includeByChurn;
       });
     }
 
-    function getHostingServers() {
+    function getHostingServers(includeOwnServers = false) {
       const servers = {};
-      for (const c of getHostingClients()) {
+      for (const c of getHostingClients(includeOwnServers)) {
         const host = extractHost(c.n8n_url);
         if (!servers[host]) servers[host] = { host, url: c.n8n_url || null, clients: [] };
         servers[host].clients.push(c);
@@ -1000,14 +1000,15 @@
     }
 
     function renderHostingInfra() {
-      const clients = getHostingClients();
-      const servers = getHostingServers();
-      const totalVagas = servers.reduce((acc, s) => acc + Math.max(0, 3 - s.clients.length), 0);
-      const lotados = servers.filter(s => s.clients.length >= 3).length;
-      const totalCost = servers.length * infraServerMonthlyCost;
-      const costPerClient = clients.length ? totalCost / clients.length : 0;
-      document.getElementById('hosting-clientes').textContent = clients.length;
-      document.getElementById('hosting-servidores').textContent = servers.length;
+      // Métricas sempre consideram apenas servidores internos (servidor_proprio = false).
+      const metricClients = getHostingClients(false);
+      const metricServers = getHostingServers(false);
+      const totalVagas = metricServers.reduce((acc, s) => acc + Math.max(0, 3 - s.clients.length), 0);
+      const lotados = metricServers.filter(s => s.clients.length >= 3).length;
+      const totalCost = metricServers.length * infraServerMonthlyCost;
+      const costPerClient = metricClients.length ? totalCost / metricClients.length : 0;
+      document.getElementById('hosting-clientes').textContent = metricClients.length;
+      document.getElementById('hosting-servidores').textContent = metricServers.length;
       document.getElementById('hosting-vagas').textContent = totalVagas;
       document.getElementById('hosting-lotados').textContent = lotados;
       document.getElementById('hosting-custo-total').textContent = formatBRL(totalCost);
@@ -1328,7 +1329,7 @@
 
     function renderHostingServers() {
       const q = (document.getElementById('search-hosting').value || '').toLowerCase();
-      const list = getHostingServers()
+      const list = getHostingServers(includeOwnServersHosting)
         .filter(s =>
           !q ||
           s.host.toLowerCase().includes(q) ||
