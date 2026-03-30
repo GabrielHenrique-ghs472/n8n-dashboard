@@ -498,9 +498,9 @@
           <textarea id="script-modal-textarea" class="script-modal-textarea" oninput="onScriptModalInput()" onscroll="onScriptModalScroll()" spellcheck="false"></textarea>
         </div>
         <div class="modal-actions">
-          <button class="copy-key-btn" onclick="scriptModalPrev()">Anterior</button>
-          <button class="copy-key-btn" onclick="scriptModalNext()">Próximo</button>
-          <button class="btn btn-primary" onclick="scriptModalGoReview()">Ir para revisão</button>
+          <button id="script-modal-prev-btn" class="btn btn-primary" onclick="scriptModalPrev()">Anterior</button>
+          <button id="script-modal-next-btn" class="btn btn-primary" onclick="scriptModalNext()">Próximo</button>
+          <button id="script-modal-review-btn" class="copy-key-btn" onclick="scriptModalGoReview()">Ir para revisão</button>
         </div>
       </div>
 
@@ -1134,6 +1134,32 @@
       textarea.scrollTop = 0;
       textarea.scrollLeft = 0;
       renderScriptModalHighlight();
+      updateScriptModalActionButtons();
+    }
+
+    function updateScriptModalActionButtons() {
+      const prevBtn = document.getElementById('script-modal-prev-btn');
+      const nextBtn = document.getElementById('script-modal-next-btn');
+      const reviewBtn = document.getElementById('script-modal-review-btn');
+      if (!prevBtn || !nextBtn || !reviewBtn) return;
+
+      const total = scriptUpdateState.queue.length;
+      const index = scriptUpdateState.queueIndex;
+      const isFirst = index <= 0;
+      const isLast = total > 0 && index >= total - 1;
+
+      prevBtn.disabled = isFirst;
+      nextBtn.disabled = isLast;
+
+      if (isLast) {
+        prevBtn.className = 'copy-key-btn';
+        nextBtn.className = 'copy-key-btn';
+        reviewBtn.className = 'btn btn-primary';
+      } else {
+        prevBtn.className = 'btn btn-primary';
+        nextBtn.className = 'btn btn-primary';
+        reviewBtn.className = 'copy-key-btn';
+      }
     }
 
     function closeScriptUpdateModal() {
