@@ -26,10 +26,13 @@ const PORT = process.env.PORT || process.env.DASHBOARD_PORT || 3456;
 const REPORT_FILE = path.join(__dirname, 'report.json');
 const HTML_FILE = path.join(__dirname, 'index.html');
 const DUPLICACAO_WEBHOOK_URL = 'https://webhooksintese.gruposintesedigital.com/webhook/dados-duplicacao';
-const WORKFLOW_UPDATE_URL = process.env.WORKFLOW_UPDATE_URL || '';
+const WORKFLOW_UPDATE_DIR = path.join(__dirname, 'workflow-update');
+const WORKFLOW_UPDATE_INTERNAL_PORT = Number(process.env.WORKFLOW_UPDATE_INTERNAL_PORT || 4399);
+const WORKFLOW_UPDATE_PUBLIC_PATH = '/workflow-update/';
 
 let refreshing = false;
 let syncing = false;
+let workflowUpdateProcess = null;
 
 function ensureConfigured(res, client, missingKeys) {
   if (client) return true;
@@ -61,8 +64,94 @@ function readJsonBody(req) {
   });
 }
 
+function readRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', chunk => {
+      chunks.push(chunk);
+      if (Buffer.concat(chunks).length > 20_000_000) {
+        reject(new Error('Payload muito grande'));
+      }
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
+function startWorkflowUpdateModule() {
+  if (workflowUpdateProcess) return;
+
+  const childEnv = {
+    ...process.env,
+    PORT: String(WORKFLOW_UPDATE_INTERNAL_PORT),
+    SUPABASE_KEY: process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_KEY || '',
+  };
+
+  workflowUpdateProcess = spawn('node', ['src/server/index.js'], {
+    cwd: WORKFLOW_UPDATE_DIR,
+    env: childEnv,
+    stdio: 'inherit',
+  });
+
+  workflowUpdateProcess.on('close', code => {
+    console.log(`[${new Date().toISOString()}] workflow-update encerrado (código ${code})`);
+    workflowUpdateProcess = null;
+  });
+}
+
+async function proxyWorkflowUpdate(req, res, url) {
+  startWorkflowUpdateModule();
+
+  const isApi = url.pathname.startsWith('/api/workflow-update');
+  const rewrittenPath = isApi
+    ? `/api${url.pathname.slice('/api/workflow-update'.length)}${url.search}`
+    : `${url.pathname.slice('/workflow-update'.length) || '/'}${url.search}`;
+
+  const targetUrl = `http://127.0.0.1:${WORKFLOW_UPDATE_INTERNAL_PORT}${rewrittenPath}`;
+  const headers = { ...req.headers };
+  delete headers.host;
+  delete headers['content-length'];
+
+  const body =
+    req.method === 'GET' || req.method === 'HEAD'
+      ? undefined
+      : await readRawBody(req);
+
+  const upstream = await fetch(targetUrl, {
+    method: req.method,
+    headers,
+    body,
+  });
+
+  const upstreamBody = Buffer.from(await upstream.arrayBuffer());
+  const responseHeaders = {};
+  upstream.headers.forEach((value, key) => {
+    if (key.toLowerCase() === 'transfer-encoding') return;
+    responseHeaders[key] = value;
+  });
+
+  res.writeHead(upstream.status, responseHeaders);
+  res.end(upstreamBody);
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://localhost`);
+
+  // URL local do módulo interno de atualização de workflows
+  if (req.method === 'GET' && url.pathname === '/api/workflow-update-url') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ url: WORKFLOW_UPDATE_PUBLIC_PATH }));
+  }
+
+  // Proxy interno do módulo de atualização de workflows (mesmo projeto/mesmo domínio)
+  if (url.pathname.startsWith('/workflow-update') || url.pathname.startsWith('/api/workflow-update')) {
+    proxyWorkflowUpdate(req, res, url)
+      .catch(err => {
+        res.writeHead(502, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: `Falha no módulo de atualização: ${err.message}` }));
+      });
+    return;
+  }
 
   // Serve o dashboard
   if (req.method === 'GET' && url.pathname === '/') {
@@ -114,12 +203,6 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/status') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ refreshing, syncing }));
-  }
-
-  // URL do sistema de atualização de workflows (embutido no menu lateral)
-  if (req.method === 'GET' && url.pathname === '/api/workflow-update-url') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ url: WORKFLOW_UPDATE_URL }));
   }
 
   // Sincronizar clientes
@@ -358,4 +441,10 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`Infraestrutura - Grupo Sintese rodando em http://localhost:${PORT}`);
+  startWorkflowUpdateModule();
+});
+
+process.on('SIGTERM', () => {
+  if (workflowUpdateProcess) workflowUpdateProcess.kill('SIGTERM');
+  process.exit(0);
 });
