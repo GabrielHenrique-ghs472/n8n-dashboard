@@ -1337,8 +1337,10 @@
           s.clients.some(c => c.nome.toLowerCase().includes(q))
         )
         .sort((a, b) => {
-          const aLotado = a.clients.length >= 3;
-          const bLotado = b.clients.length >= 3;
+          const aOwnServer = a.clients.some(c => c.servidor_proprio === true);
+          const bOwnServer = b.clients.some(c => c.servidor_proprio === true);
+          const aLotado = aOwnServer || a.clients.length >= 3;
+          const bLotado = bOwnServer || b.clients.length >= 3;
           if (aLotado !== bLotado) return aLotado ? 1 : -1; // Disponiveis primeiro
           return b.clients.length - a.clients.length || a.host.localeCompare(b.host);
         });
@@ -1350,8 +1352,9 @@
 
       const rows = list.map((s, i) => {
         const count = s.clients.length;
-        const vagas = Math.max(0, 3 - count);
-        const status = count >= 3
+        const isOwnServer = s.clients.some(c => c.servidor_proprio === true);
+        const vagas = isOwnServer ? 0 : Math.max(0, 3 - count);
+        const status = (isOwnServer || count >= 3)
           ? '<span class="capacity-badge capacity-full">Lotado</span>'
           : '<span class="capacity-badge capacity-ok">Disponivel</span>';
         const clients = s.clients.map(c => `<span class="server-pill">${esc(c.nome)}</span>`).join('');
