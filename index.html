@@ -1126,8 +1126,8 @@
 
       progress.textContent = `Item ${scriptUpdateState.queueIndex + 1}/${scriptUpdateState.queue.length}`;
       node.textContent = `Node: ${current.nodeName || '-'}`;
-      field.textContent = `Campo: ${current.assignmentName || '-'}`;
-      meta.textContent = `${current.scriptName || '-'} · ${current.nodeName || '-'}`;
+      field.textContent = `Campo: ${formatScriptTypeDisplayName(current.assignmentName || '-')}`;
+      meta.textContent = `${formatScriptTypeDisplayName(current.scriptName || '-')} · ${current.nodeName || '-'}`;
       textarea.value = Object.prototype.hasOwnProperty.call(scriptUpdateState.drafts, current.itemId)
         ? scriptUpdateState.drafts[current.itemId]
         : current.originalValue;
@@ -1231,7 +1231,7 @@
           return `<div class="script-diff-line ${cls}">${esc(prefix + ' ' + String(line.value || ''))}</div>`;
         }).join('');
         return `<div class="script-review-item">
-          <div class="script-review-head">${esc(change.scriptName)} · ${esc(change.nodeName || '-')} · ${esc(change.assignmentName || '-')}</div>
+          <div class="script-review-head">${esc(formatScriptTypeDisplayName(change.scriptName))} · ${esc(change.nodeName || '-')} · ${esc(formatScriptTypeDisplayName(change.assignmentName || '-'))}</div>
           <div class="script-review-body">${linesHtml}</div>
         </div>`;
       }).join('');
