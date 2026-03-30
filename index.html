@@ -1625,6 +1625,7 @@
           ? '<span class="capacity-badge capacity-full">Lotado</span>'
           : '<span class="capacity-badge capacity-ok">Disponivel</span>';
         const clients = s.clients.map(c => `<span class="server-pill">${esc(c.nome)}</span>`).join('');
+        const encodedClients = encodeURIComponent(JSON.stringify(s.clients.map(c => c.nome).filter(Boolean)));
         const uniqueKeys = [...new Set(s.clients.map(c => c.api_key).filter(Boolean))];
         const hasKey = uniqueKeys.length > 0;
         const encodedKey = hasKey ? encodeURIComponent(String(uniqueKeys[0])) : '';
