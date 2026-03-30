@@ -575,6 +575,22 @@ const server = http.createServer((req, res) => {
         return res.end(JSON.stringify({ error: 'Cliente sem n8n_url/api_key válido.' }));
       }
 
+      const normalizedClientName = normalizeTextLoose(row.nome);
+      if (normalizedClientName === 'base sintese') {
+        const pinnedWorkflow = {
+          id: 'KYxWBDGWNlIF63Xo',
+          name: 'Gerador de resposta comercial // CRM NOVO // Garagem',
+          active: true,
+          updatedAt: null,
+        };
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          client: { id: row.id, nome: row.nome },
+          workflows: [pinnedWorkflow],
+          allWorkflowsCount: 1,
+        }));
+      }
+
       const json = await n8nFetchJson(`${baseUrl}/api/v1/workflows?limit=250`, {
         method: 'GET',
         headers: buildScriptUpdateHeaders(apiKey),
