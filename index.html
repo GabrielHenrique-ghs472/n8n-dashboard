@@ -302,6 +302,41 @@
     .script-editor-text { width:100%; min-height:160px; resize:vertical; border:1px solid #2a2a2a; border-radius:8px; background:#050505; color:#e8e8e8; padding:10px; font-size:12px; font-family:'SF Mono', Menlo, Consolas, monospace; }
     .script-editor-text:focus { outline:none; border-color:#434343; }
     .script-modal-toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+    .script-modal-editor-stack { position:relative; border:1px solid #2a2a2a; border-radius:8px; background:#050505; min-height:380px; overflow:hidden; }
+    .script-modal-highlight {
+      position:absolute;
+      inset:0;
+      margin:0;
+      padding:10px;
+      white-space:pre-wrap;
+      word-break:break-word;
+      overflow:auto;
+      color:#e8e8e8;
+      font-size:12px;
+      line-height:1.45;
+      font-family:'SF Mono', Menlo, Consolas, monospace;
+      pointer-events:none;
+    }
+    .script-modal-highlight .expr { background:#10331d; color:#8df0b0; border-radius:4px; padding:0 1px; }
+    .script-modal-textarea {
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      margin:0;
+      resize:none;
+      border:none;
+      border-radius:0;
+      background:transparent;
+      color:transparent;
+      caret-color:#f2f2f2;
+      padding:10px;
+      font-size:12px;
+      line-height:1.45;
+      font-family:'SF Mono', Menlo, Consolas, monospace;
+      overflow:auto;
+    }
+    .script-modal-textarea:focus { outline:none; }
     .script-review-item { border:1px solid #1f1f1f; border-radius:8px; overflow:hidden; margin-bottom:8px; }
     .script-review-head { background:#0c0c0c; border-bottom:1px solid #1f1f1f; padding:8px 10px; color:#a8a8a8; font-size:12px; }
     .script-review-body { font-family:'SF Mono', Menlo, Consolas, monospace; font-size:12px; line-height:1.5; }
@@ -437,7 +472,10 @@
           <span id="script-modal-node" class="kpi">Node: —</span>
           <span id="script-modal-field" class="kpi">Campo: —</span>
         </div>
-        <textarea id="script-modal-textarea" class="script-editor-text" style="min-height:380px;"></textarea>
+        <div class="script-modal-editor-stack">
+          <pre id="script-modal-highlight" class="script-modal-highlight"></pre>
+          <textarea id="script-modal-textarea" class="script-modal-textarea" oninput="onScriptModalInput()" onscroll="onScriptModalScroll()" spellcheck="false"></textarea>
+        </div>
         <div class="modal-actions">
           <button class="copy-key-btn" onclick="scriptModalPrev()">Anterior</button>
           <button class="copy-key-btn" onclick="scriptModalNext()">Próximo</button>
@@ -954,6 +992,62 @@
       scriptUpdateState.drafts[itemId] = value;
     }
 
+    function highlightExpressionsToHtml(text) {
+      const source = String(text ?? '');
+      let i = 0;
+      let out = '';
+
+      while (i < source.length) {
+        const openAt = source.indexOf('{{', i);
+        if (openAt === -1) {
+          out += esc(source.slice(i));
+          break;
+        }
+
+        out += esc(source.slice(i, openAt));
+        const closeAt = source.indexOf('}}', openAt + 2);
+        const nextOpenAt = source.indexOf('{{', openAt + 2);
+        const hasValidClose = closeAt !== -1 && (nextOpenAt === -1 || closeAt < nextOpenAt);
+
+        if (!hasValidClose) {
+          out += esc(source.slice(openAt, openAt + 2));
+          i = openAt + 2;
+          continue;
+        }
+
+        out += `<span class="expr">${esc(source.slice(openAt, closeAt + 2))}</span>`;
+        i = closeAt + 2;
+      }
+
+      return out;
+    }
+
+    function renderScriptModalHighlight() {
+      const textarea = document.getElementById('script-modal-textarea');
+      const highlight = document.getElementById('script-modal-highlight');
+      if (!textarea || !highlight) return;
+      highlight.innerHTML = highlightExpressionsToHtml(textarea.value || '');
+      highlight.scrollTop = textarea.scrollTop;
+      highlight.scrollLeft = textarea.scrollLeft;
+    }
+
+    function onScriptModalInput() {
+      const current = getCurrentScriptQueueItem();
+      const textarea = document.getElementById('script-modal-textarea');
+      if (current && textarea) {
+        scriptUpdateState.drafts[current.itemId] = textarea.value;
+      }
+      renderScriptModalHighlight();
+    }
+
+    function onScriptModalScroll() {
+      const textarea = document.getElementById('script-modal-textarea');
+      const highlight = document.getElementById('script-modal-highlight');
+      if (!textarea || !highlight) return;
+      highlight.scrollTop = textarea.scrollTop;
+      highlight.scrollLeft = textarea.scrollLeft;
+    }
+
     function setScriptModalMessage(message, type = '') {
       const el = document.getElementById('script-modal-message');
       if (!el) return;
@@ -1000,6 +1094,9 @@
       textarea.value = Object.prototype.hasOwnProperty.call(scriptUpdateState.drafts, current.itemId)
         ? scriptUpdateState.drafts[current.itemId]
         : current.originalValue;
+      textarea.scrollTop = 0;
+      textarea.scrollLeft = 0;
+      renderScriptModalHighlight();
     }
 
     function closeScriptUpdateModal() {
