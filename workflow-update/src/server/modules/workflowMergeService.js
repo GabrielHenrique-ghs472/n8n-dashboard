@@ -257,11 +257,11 @@ export function prepareWorkflowForTarget(sourceWorkflow, targetWorkflow, options
   let originOverrideNodes = 0;
 
   for (const sourceNode of sourceNodes) {
-    const keepFromSource = shouldKeepNodeExactlyFromSource(targetWorkflowName, sourceNode?.name);
+    const keepSpecialNode = shouldKeepNodeExactlyFromSource(targetWorkflowName, sourceNode?.name);
     const match = matchSourceNodeToTargetIndex(sourceNode, targetLookup, usedTargetIndexes);
     if (match.index === null) {
       unmatchedNodes += 1;
-      if (!keepFromSource && sourceNode?.credentials !== undefined) {
+      if (!keepSpecialNode && sourceNode?.credentials !== undefined) {
         const remap = remapSourceCredentialsFromCatalog(
           sourceNode,
           targetCredentialCatalog,
@@ -272,7 +272,7 @@ export function prepareWorkflowForTarget(sourceWorkflow, targetWorkflow, options
         credentialsInheritedByType += remap.inheritedCount;
         sourceCredentialsFallbackUsed += remap.sourceFallbackCount;
       }
-      if (keepFromSource) {
+      if (keepSpecialNode) {
         originOverrideNodes += 1;
       }
       continue;
@@ -281,12 +281,28 @@ export function prepareWorkflowForTarget(sourceWorkflow, targetWorkflow, options
     matchedNodes += 1;
     usedTargetIndexes.add(match.index);
 
-    if (keepFromSource) {
+    const targetNode = targetNodes[match.index];
+
+    if (keepSpecialNode) {
       originOverrideNodes += 1;
+
+      // Regra de não mudança: para nodes especiais, manter exatamente como está no destino.
+      sourceNode.name = targetNode?.name;
+      sourceNode.type = targetNode?.type;
+      sourceNode.typeVersion = targetNode?.typeVersion;
+      sourceNode.parameters = deepClone(targetNode?.parameters ?? {});
+      if (targetNode?.credentials !== undefined) {
+        sourceNode.credentials = deepClone(targetNode.credentials);
+      } else {
+        delete sourceNode.credentials;
+      }
+      if (Array.isArray(targetNode?.position)) {
+        sourceNode.position = [...targetNode.position];
+      } else {
+        delete sourceNode.position;
+      }
       continue;
     }
-
-    const targetNode = targetNodes[match.index];
 
     if (isObject(targetNode?.credentials)) {
       sourceNode.credentials = deepClone(targetNode.credentials);

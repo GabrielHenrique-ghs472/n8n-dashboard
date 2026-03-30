@@ -4,17 +4,17 @@ const WORKFLOW_NODE_RULES = [
   {
     workflowNameIncludes: "tratativa",
     nodeNames: ["Webhook1"],
-    description: "Node mantido exatamente como origem",
+    description: "Node mantido exatamente como destino",
   },
   {
     workflowNameIncludes: "follow",
     nodeNames: ["Nome do cliente"],
-    description: "Node mantido exatamente como origem",
+    description: "Node mantido exatamente como destino",
   },
   {
     workflowNameIncludes: "chamada de retorno",
     nodeNames: ["Nome do cliente"],
-    description: "Node mantido exatamente como origem",
+    description: "Node mantido exatamente como destino",
   },
 ];
 
