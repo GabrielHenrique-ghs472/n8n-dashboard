@@ -291,6 +291,16 @@
     .embedded-frame { width:100%; min-height:860px; border:0; background:#000; display:block; }
     .embedded-empty { padding:16px; color:#a3a3a3; font-size:12px; }
     .embedded-empty code { font-family:'SF Mono', Menlo, Consolas, monospace; color:#ececec; }
+    .script-update-grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    .script-type-list-inline { display:flex; flex-wrap:wrap; gap:8px; border:1px solid #1f1f1f; border-radius:8px; padding:10px; background:#060606; }
+    .script-type-check { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#c8c8c8; border:1px solid #262626; border-radius:999px; padding:4px 9px; background:#0a0a0a; }
+    .script-type-check input { accent-color:#f1f1f1; }
+    .script-editor-list { display:grid; gap:10px; }
+    .script-editor-item { border:1px solid #1f1f1f; border-radius:10px; padding:10px; background:#060606; }
+    .script-editor-title { font-size:12px; color:#d3d3d3; margin-bottom:6px; }
+    .script-editor-meta { font-size:11px; color:#686868; margin-bottom:8px; }
+    .script-editor-text { width:100%; min-height:160px; resize:vertical; border:1px solid #2a2a2a; border-radius:8px; background:#050505; color:#e8e8e8; padding:10px; font-size:12px; font-family:'SF Mono', Menlo, Consolas, monospace; }
+    .script-editor-text:focus { outline:none; border-color:#434343; }
 
     @media (max-width: 980px) {
       .app-shell { flex-direction: column; min-height: auto; }
@@ -299,6 +309,7 @@
       .side-tab { width: auto; min-width: 170px; margin: 0; }
       .content { padding: 16px; }
       .header { padding: 12px 16px; }
+      .script-update-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -427,6 +438,7 @@
       <button class="side-tab" id="menu-erros" onclick="switchMainSection('erros', this)">Erros n8n</button>
       <button class="side-tab" id="menu-manutencao" onclick="switchMainSection('manutencao', this)">Manutenção de clientes</button>
       <button class="side-tab" id="menu-atualizacao" onclick="switchMainSection('atualizacao', this)">Atualização de workflows</button>
+      <button class="side-tab" id="menu-scripts" onclick="switchMainSection('scripts', this)">Atualização scripts</button>
     </aside>
 
     <main class="main-area">
@@ -545,6 +557,47 @@
           </div>
         </div>
       </section>
+
+      <section class="content" id="section-scripts" style="display:none">
+        <div class="card" style="margin-bottom:12px;">
+          <div class="label">Seleção</div>
+          <div class="script-update-grid">
+            <label class="form-label" style="margin:0;">
+              Cliente
+              <select id="script-client-select" class="form-input" onchange="onScriptUpdateClientChange(this.value)">
+                <option value="">Selecione um cliente</option>
+              </select>
+            </label>
+            <label class="form-label" style="margin:0;">
+              Workflow
+              <select id="script-workflow-select" class="form-input" onchange="onScriptUpdateWorkflowChange(this.value)">
+                <option value="">Selecione um workflow</option>
+              </select>
+            </label>
+          </div>
+
+          <div id="script-types-box" class="script-type-list-inline" style="margin-top:10px;">
+            <span class="hint">Selecione cliente e workflow para carregar tipos de script.</span>
+          </div>
+
+          <div class="native-actions">
+            <button class="btn btn-primary" id="btn-script-load" onclick="loadScriptUpdateItems()">Carregar scripts selecionados</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:12px;">
+          <div class="label">Editor de Scripts</div>
+          <div id="script-editor-list" class="script-editor-list">
+            <div class="empty"><p>Nenhum script carregado.</p></div>
+          </div>
+        </div>
+
+        <div class="native-actions">
+          <button class="copy-key-btn" onclick="reviewScriptUpdateChanges()">Revisar alterações</button>
+          <button class="btn btn-primary" onclick="saveScriptUpdateChanges()">Salvar alterações</button>
+        </div>
+        <div id="script-update-message" class="modal-msg" style="margin-top:10px;"></div>
+      </section>
     </main>
   </div>
 
@@ -571,6 +624,17 @@
     let workflowCleanupList = [];
     let workflowCleanupSelected = new Set();
     let workflowUpdateUrl = '';
+    const scriptUpdateState = {
+      clients: [],
+      workflows: [],
+      selectedClientId: '',
+      selectedWorkflowId: '',
+      scriptTypes: [],
+      selectedScriptNames: new Set(),
+      itemsByScriptName: {},
+      drafts: {},
+      initialized: false,
+    };
 
     function esc(s) {
       return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -610,6 +674,7 @@
       document.getElementById('section-erros').style.display = section === 'erros' ? '' : 'none';
       document.getElementById('section-manutencao').style.display = section === 'manutencao' ? '' : 'none';
       document.getElementById('section-atualizacao').style.display = section === 'atualizacao' ? '' : 'none';
+      document.getElementById('section-scripts').style.display = section === 'scripts' ? '' : 'none';
 
       if (section === 'estrutura') {
         document.getElementById('sub-header').textContent = 'Grupo Síntese Digital · Estrutura de clientes ativos';
@@ -625,6 +690,9 @@
         loadClients();
         renderAtualizacao();
         ensureWorkflowUpdateEmbedded();
+      } else if (section === 'scripts') {
+        document.getElementById('sub-header').textContent = 'Grupo Síntese Digital · Atualização de scripts';
+        initScriptUpdateSection();
       } else {
         document.getElementById('sub-header').textContent = errorSubHeader;
       }
@@ -674,6 +742,269 @@
       window.open(workflowUpdateUrl, '_blank', 'noopener,noreferrer');
     }
 
+    async function scriptUpdateApi(path, options = {}) {
+      const response = await fetch(`/api/script-update${path}`, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options,
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json?.error || `Falha na API (${response.status})`);
+      return json;
+    }
+
+    function setScriptUpdateMessage(message, type = '') {
+      const el = document.getElementById('script-update-message');
+      if (!el) return;
+      el.textContent = message || '';
+      el.className = `modal-msg${type ? ` ${type}` : ''}`;
+    }
+
+    function renderScriptUpdateClients() {
+      const select = document.getElementById('script-client-select');
+      if (!select) return;
+      const options = scriptUpdateState.clients
+        .map(c => `<option value="${encodeURIComponent(c.id)}">${esc(c.nome)}</option>`)
+        .join('');
+      select.innerHTML = `<option value="">Selecione um cliente</option>${options}`;
+      select.value = scriptUpdateState.selectedClientId ? encodeURIComponent(scriptUpdateState.selectedClientId) : '';
+    }
+
+    function renderScriptUpdateWorkflows() {
+      const select = document.getElementById('script-workflow-select');
+      if (!select) return;
+      const options = scriptUpdateState.workflows
+        .map(w => `<option value="${encodeURIComponent(w.id)}">${esc(w.name)}</option>`)
+        .join('');
+      select.innerHTML = `<option value="">Selecione um workflow</option>${options}`;
+      select.value = scriptUpdateState.selectedWorkflowId ? encodeURIComponent(scriptUpdateState.selectedWorkflowId) : '';
+    }
+
+    function renderScriptUpdateTypes() {
+      const box = document.getElementById('script-types-box');
+      if (!box) return;
+      if (!scriptUpdateState.scriptTypes.length) {
+        box.innerHTML = '<span class="hint">Nenhum tipo de script encontrado neste workflow.</span>';
+        return;
+      }
+      box.innerHTML = scriptUpdateState.scriptTypes.map(item => {
+        const encoded = encodeURIComponent(item.name);
+        const checked = scriptUpdateState.selectedScriptNames.has(item.name) ? 'checked' : '';
+        return `<label class="script-type-check">
+          <input type="checkbox" ${checked} onchange="toggleScriptTypeSelection(decodeURIComponent('${encoded}'), this.checked)">
+          <span>${esc(item.name)} (${item.occurrences})</span>
+        </label>`;
+      }).join('');
+    }
+
+    function renderScriptEditorItems() {
+      const box = document.getElementById('script-editor-list');
+      if (!box) return;
+      const scriptNames = Object.keys(scriptUpdateState.itemsByScriptName);
+      if (!scriptNames.length) {
+        box.innerHTML = '<div class="empty"><p>Nenhum script carregado.</p></div>';
+        return;
+      }
+
+      const chunks = [];
+      for (const scriptName of scriptNames) {
+        const items = scriptUpdateState.itemsByScriptName[scriptName] || [];
+        chunks.push(`<div class="script-editor-item"><div class="script-editor-title">${esc(scriptName)}</div>`);
+        if (!items.length) {
+          chunks.push('<div class="script-editor-meta">Nenhum item editável encontrado.</div></div>');
+          continue;
+        }
+        for (const item of items) {
+          const itemId = String(item.itemId || '');
+          const encodedItemId = encodeURIComponent(itemId);
+          const draftValue = Object.prototype.hasOwnProperty.call(scriptUpdateState.drafts, itemId)
+            ? scriptUpdateState.drafts[itemId]
+            : item.originalValue;
+          chunks.push(`
+            <div style="margin-bottom:10px;">
+              <div class="script-editor-meta">Node: ${esc(item.nodeName)} · Campo: ${esc(item.assignmentName)}</div>
+              <textarea class="script-editor-text" oninput="updateScriptDraft(decodeURIComponent('${encodedItemId}'), this.value)">${esc(draftValue)}</textarea>
+            </div>
+          `);
+        }
+        chunks.push('</div>');
+      }
+      box.innerHTML = chunks.join('');
+    }
+
+    async function initScriptUpdateSection() {
+      if (scriptUpdateState.initialized) return;
+      scriptUpdateState.initialized = true;
+      setScriptUpdateMessage('Carregando clientes...');
+      try {
+        const payload = await scriptUpdateApi('/clients');
+        scriptUpdateState.clients = Array.isArray(payload?.clients) ? payload.clients : [];
+        renderScriptUpdateClients();
+        setScriptUpdateMessage(`Clientes carregados: ${scriptUpdateState.clients.length}`, 'ok');
+      } catch (error) {
+        setScriptUpdateMessage(error.message, 'error');
+      }
+    }
+
+    async function onScriptUpdateClientChange(encodedClientId) {
+      const clientId = encodedClientId ? decodeURIComponent(encodedClientId) : '';
+      scriptUpdateState.selectedClientId = clientId;
+      scriptUpdateState.selectedWorkflowId = '';
+      scriptUpdateState.workflows = [];
+      scriptUpdateState.scriptTypes = [];
+      scriptUpdateState.selectedScriptNames = new Set();
+      scriptUpdateState.itemsByScriptName = {};
+      scriptUpdateState.drafts = {};
+      renderScriptUpdateWorkflows();
+      renderScriptUpdateTypes();
+      renderScriptEditorItems();
+      if (!clientId) return;
+
+      setScriptUpdateMessage('Carregando workflows do cliente...');
+      try {
+        const payload = await scriptUpdateApi(`/clients/${encodeURIComponent(clientId)}/workflows`);
+        scriptUpdateState.workflows = Array.isArray(payload?.workflows) ? payload.workflows : [];
+        renderScriptUpdateWorkflows();
+        setScriptUpdateMessage(`Workflows carregados: ${scriptUpdateState.workflows.length}`, 'ok');
+      } catch (error) {
+        setScriptUpdateMessage(error.message, 'error');
+      }
+    }
+
+    async function onScriptUpdateWorkflowChange(encodedWorkflowId) {
+      const workflowId = encodedWorkflowId ? decodeURIComponent(encodedWorkflowId) : '';
+      scriptUpdateState.selectedWorkflowId = workflowId;
+      scriptUpdateState.scriptTypes = [];
+      scriptUpdateState.selectedScriptNames = new Set();
+      scriptUpdateState.itemsByScriptName = {};
+      scriptUpdateState.drafts = {};
+      renderScriptUpdateTypes();
+      renderScriptEditorItems();
+      if (!workflowId || !scriptUpdateState.selectedClientId) return;
+
+      setScriptUpdateMessage('Carregando tipos de script...');
+      try {
+        const payload = await scriptUpdateApi(`/clients/${encodeURIComponent(scriptUpdateState.selectedClientId)}/workflows/${encodeURIComponent(workflowId)}/script-types`);
+        scriptUpdateState.scriptTypes = Array.isArray(payload?.scriptTypes) ? payload.scriptTypes : [];
+        renderScriptUpdateTypes();
+        setScriptUpdateMessage(`Tipos de script: ${scriptUpdateState.scriptTypes.length}`, 'ok');
+      } catch (error) {
+        setScriptUpdateMessage(error.message, 'error');
+      }
+    }
+
+    function toggleScriptTypeSelection(scriptName, checked) {
+      if (checked) scriptUpdateState.selectedScriptNames.add(scriptName);
+      else scriptUpdateState.selectedScriptNames.delete(scriptName);
+    }
+
+    async function loadScriptUpdateItems() {
+      if (!scriptUpdateState.selectedClientId || !scriptUpdateState.selectedWorkflowId) {
+        setScriptUpdateMessage('Selecione cliente e workflow.', 'error');
+        return;
+      }
+      const selectedNames = [...scriptUpdateState.selectedScriptNames];
+      if (!selectedNames.length) {
+        setScriptUpdateMessage('Selecione pelo menos um tipo de script.', 'error');
+        return;
+      }
+
+      scriptUpdateState.itemsByScriptName = {};
+      scriptUpdateState.drafts = {};
+      setScriptUpdateMessage('Carregando scripts selecionados...');
+      try {
+        for (const scriptName of selectedNames) {
+          const payload = await scriptUpdateApi(
+            `/clients/${encodeURIComponent(scriptUpdateState.selectedClientId)}/workflows/${encodeURIComponent(scriptUpdateState.selectedWorkflowId)}/scripts?scriptName=${encodeURIComponent(scriptName)}`
+          );
+          const items = Array.isArray(payload?.items) ? payload.items : [];
+          scriptUpdateState.itemsByScriptName[scriptName] = items;
+          for (const item of items) {
+            scriptUpdateState.drafts[item.itemId] = item.originalValue;
+          }
+        }
+        renderScriptEditorItems();
+        const totalItems = Object.values(scriptUpdateState.itemsByScriptName).reduce((acc, items) => acc + items.length, 0);
+        setScriptUpdateMessage(`Scripts carregados com sucesso. Itens editáveis: ${totalItems}`, 'ok');
+      } catch (error) {
+        setScriptUpdateMessage(error.message, 'error');
+      }
+    }
+
+    function updateScriptDraft(itemId, value) {
+      scriptUpdateState.drafts[itemId] = value;
+    }
+
+    function buildScriptEdits(scriptName) {
+      const items = scriptUpdateState.itemsByScriptName[scriptName] || [];
+      return items.map(item => ({
+        itemId: item.itemId,
+        editedValue: Object.prototype.hasOwnProperty.call(scriptUpdateState.drafts, item.itemId)
+          ? scriptUpdateState.drafts[item.itemId]
+          : item.originalValue,
+      }));
+    }
+
+    async function reviewScriptUpdateChanges() {
+      const scriptNames = Object.keys(scriptUpdateState.itemsByScriptName);
+      if (!scriptNames.length) {
+        setScriptUpdateMessage('Carregue scripts para revisar.', 'error');
+        return;
+      }
+
+      setScriptUpdateMessage('Gerando revisão das alterações...');
+      try {
+        let changedTotal = 0;
+        for (const scriptName of scriptNames) {
+          const payload = await scriptUpdateApi(
+            `/clients/${encodeURIComponent(scriptUpdateState.selectedClientId)}/workflows/${encodeURIComponent(scriptUpdateState.selectedWorkflowId)}/review`,
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                selectedScriptName: scriptName,
+                edits: buildScriptEdits(scriptName),
+              }),
+            }
+          );
+          changedTotal += Number(payload?.changedCount || 0);
+        }
+        if (changedTotal > 0) {
+          setScriptUpdateMessage(`Revisão concluída. Itens com alterações: ${changedTotal}`, 'ok');
+        } else {
+          setScriptUpdateMessage('Revisão concluída. Nenhuma alteração detectada.', 'error');
+        }
+      } catch (error) {
+        setScriptUpdateMessage(error.message, 'error');
+      }
+    }
+
+    async function saveScriptUpdateChanges() {
+      const scriptNames = Object.keys(scriptUpdateState.itemsByScriptName);
+      if (!scriptNames.length) {
+        setScriptUpdateMessage('Carregue scripts antes de salvar.', 'error');
+        return;
+      }
+
+      setScriptUpdateMessage('Salvando alterações no n8n...');
+      try {
+        let changedTotal = 0;
+        for (const scriptName of scriptNames) {
+          const payload = await scriptUpdateApi(
+            `/clients/${encodeURIComponent(scriptUpdateState.selectedClientId)}/workflows/${encodeURIComponent(scriptUpdateState.selectedWorkflowId)}/save`,
+            {
+              method: 'POST',
+              body: JSON.stringify({
+                selectedScriptName: scriptName,
+                edits: buildScriptEdits(scriptName),
+              }),
+            }
+          );
+          changedTotal += Number(payload?.changedCount || 0);
+        }
+        setScriptUpdateMessage(`Alterações salvas com sucesso. Itens alterados: ${changedTotal}`, 'ok');
+      } catch (error) {
+        setScriptUpdateMessage(error.message, 'error');
+      }
+    }
 
     function switchTab(tab, el) {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
