@@ -487,6 +487,38 @@ function App() {
       .filter((item) => item.rules.length > 0);
   }, [workflowLinks, targetWorkflowMap]);
 
+  function selectAllTargetByClientName() {
+    if (!selectedTargetClient?.nome) {
+      setStatus({ type: "error", message: "Selecione um cliente destino primeiro." });
+      return;
+    }
+
+    const needle = normalizeLoose(selectedTargetClient.nome);
+    const matches = targetWorkflows.filter((workflow) =>
+      normalizeLoose(workflow?.name).includes(needle)
+    );
+
+    const ids = matches.map((workflow) => String(workflow.id));
+    setTargetClientNameFilterEnabled(true);
+    setSelectedTargetWorkflowIds(ids);
+    setWorkflowLinks((current) =>
+      current.filter((item) => ids.includes(String(item.targetWorkflowId)))
+    );
+
+    if (ids.length === 0) {
+      setStatus({
+        type: "error",
+        message: `Nenhum workflow de destino encontrado contendo o nome do cliente "${selectedTargetClient.nome}".`,
+      });
+      return;
+    }
+
+    setStatus({
+      type: "success",
+      message: `Selecionados ${ids.length} workflow(s) de destino pelo nome do cliente.`,
+    });
+  }
+
   function applyBaseTemplateSelection() {
     const selectedByRule = new Map();
     const missingRules = [];
@@ -708,6 +740,15 @@ function App() {
                   }
                 >
                   {targetClientNameFilterEnabled ? "Mostrar todos" : "Filtrar por cliente"}
+                </button>
+              ) : null}
+              {selectedTargetClient ? (
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={selectAllTargetByClientName}
+                >
+                  Selecionar por cliente
                 </button>
               ) : null}
             </div>
