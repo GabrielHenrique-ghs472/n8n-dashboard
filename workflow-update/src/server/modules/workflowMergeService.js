@@ -6,18 +6,21 @@ function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-const ORIGIN_NODE_OVERRIDE_RULES = [
+const SPECIAL_NODE_RULES = [
   {
     workflowNameIncludes: "tratativa",
     nodeNames: ["Webhook1"],
+    preserveFrom: "target",
   },
   {
     workflowNameIncludes: "follow",
     nodeNames: ["Nome do cliente"],
+    preserveFrom: "target",
   },
   {
     workflowNameIncludes: "chamada de retorno",
     nodeNames: ["Nome do cliente"],
+    preserveFrom: "target",
   },
 ];
 
@@ -155,14 +158,14 @@ function remapSourceCredentialsFromCatalog(
   };
 }
 
-function shouldKeepNodeExactlyFromSource(targetWorkflowName, sourceNodeName) {
+function findMatchingSpecialNodeRule(targetWorkflowName, sourceNodeName) {
   const workflowNorm = normalizeRuleToken(targetWorkflowName);
   const nodeNorm = normalizeRuleToken(sourceNodeName);
   if (!workflowNorm || !nodeNorm) {
-    return false;
+    return null;
   }
 
-  return ORIGIN_NODE_OVERRIDE_RULES.some((rule) => {
+  return SPECIAL_NODE_RULES.find((rule) => {
     const workflowMatch = workflowNorm.includes(normalizeRuleToken(rule.workflowNameIncludes));
     if (!workflowMatch) {
       return false;
@@ -255,9 +258,11 @@ export function prepareWorkflowForTarget(sourceWorkflow, targetWorkflow, options
   let matchedNodes = 0;
   let unmatchedNodes = 0;
   let originOverrideNodes = 0;
+  let targetOverrideNodes = 0;
 
   for (const sourceNode of sourceNodes) {
-    const keepSpecialNode = shouldKeepNodeExactlyFromSource(targetWorkflowName, sourceNode?.name);
+    const specialRule = findMatchingSpecialNodeRule(targetWorkflowName, sourceNode?.name);
+    const keepSpecialNode = Boolean(specialRule);
     const match = matchSourceNodeToTargetIndex(sourceNode, targetLookup, usedTargetIndexes);
     if (match.index === null) {
       unmatchedNodes += 1;
@@ -283,8 +288,8 @@ export function prepareWorkflowForTarget(sourceWorkflow, targetWorkflow, options
 
     const targetNode = targetNodes[match.index];
 
-    if (keepSpecialNode) {
-      originOverrideNodes += 1;
+    if (keepSpecialNode && specialRule?.preserveFrom === "target") {
+      targetOverrideNodes += 1;
 
       // Regra de não mudança: para nodes especiais, manter exatamente como está no destino.
       sourceNode.name = targetNode?.name;
@@ -301,6 +306,11 @@ export function prepareWorkflowForTarget(sourceWorkflow, targetWorkflow, options
       } else {
         delete sourceNode.position;
       }
+      continue;
+    }
+
+    if (keepSpecialNode && specialRule?.preserveFrom === "source") {
+      originOverrideNodes += 1;
       continue;
     }
 
@@ -336,6 +346,7 @@ export function prepareWorkflowForTarget(sourceWorkflow, targetWorkflow, options
       matchedNodes,
       unmatchedNodes,
       originOverrideNodes,
+      targetOverrideNodes,
     },
   };
 }
