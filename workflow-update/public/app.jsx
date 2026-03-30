@@ -59,6 +59,12 @@ function normalizeRuleToken(value) {
     .replace(/\s+/g, "");
 }
 
+function normalizeServerUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+}
+
 function getActiveRulesForWorkflowName(workflowName) {
   const normalizedName = normalizeRuleToken(workflowName);
   if (!normalizedName) return [];
@@ -469,9 +475,19 @@ function App() {
       }
 
       setBatchResults(results);
+      const targetServerUrl = normalizeServerUrl(selectedTargetClient?.n8n_url);
+      let openedTargetServer = false;
+      if (targetServerUrl) {
+        const opened = window.open(targetServerUrl, "_blank", "noopener,noreferrer");
+        openedTargetServer = Boolean(opened);
+      }
       setStatus({
         type: "success",
-        message: `Lote concluído com sucesso. Atualizados: ${results.length} workflow(s).`,
+        message: openedTargetServer
+          ? `Lote concluído com sucesso. Atualizados: ${results.length} workflow(s). Servidor aberto em nova guia.`
+          : targetServerUrl
+          ? `Lote concluído com sucesso. Atualizados: ${results.length} workflow(s). O navegador bloqueou a nova guia.`
+          : `Lote concluído com sucesso. Atualizados: ${results.length} workflow(s).`,
       });
     } catch (error) {
       setStatus({ type: "error", message: error.message });
