@@ -25,6 +25,14 @@ function getNormalized(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function normalizeRuleToken(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, "");
+}
+
 function buildTargetCredentialCatalog(targetNodes) {
   const byType = new Map();
   const byTypeAndName = new Map();
@@ -148,19 +156,19 @@ function remapSourceCredentialsFromCatalog(
 }
 
 function shouldKeepNodeExactlyFromSource(targetWorkflowName, sourceNodeName) {
-  const workflowNorm = getNormalized(targetWorkflowName);
-  const nodeNorm = getNormalized(sourceNodeName);
+  const workflowNorm = normalizeRuleToken(targetWorkflowName);
+  const nodeNorm = normalizeRuleToken(sourceNodeName);
   if (!workflowNorm || !nodeNorm) {
     return false;
   }
 
   return ORIGIN_NODE_OVERRIDE_RULES.some((rule) => {
-    const workflowMatch = workflowNorm.includes(getNormalized(rule.workflowNameIncludes));
+    const workflowMatch = workflowNorm.includes(normalizeRuleToken(rule.workflowNameIncludes));
     if (!workflowMatch) {
       return false;
     }
 
-    return rule.nodeNames.some((nodeName) => getNormalized(nodeName) === nodeNorm);
+    return rule.nodeNames.some((nodeName) => normalizeRuleToken(nodeName) === nodeNorm);
   });
 }
 

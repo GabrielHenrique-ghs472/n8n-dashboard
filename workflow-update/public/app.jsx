@@ -39,12 +39,20 @@ function normalizeLoose(value) {
     .trim();
 }
 
+function normalizeRuleToken(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, "");
+}
+
 function getActiveRulesForWorkflowName(workflowName) {
-  const normalizedName = String(workflowName || "").toLowerCase();
+  const normalizedName = normalizeRuleToken(workflowName);
   if (!normalizedName) return [];
 
   return WORKFLOW_NODE_RULES.filter((rule) =>
-    normalizedName.includes(String(rule.workflowNameIncludes || "").toLowerCase())
+    normalizedName.includes(normalizeRuleToken(rule.workflowNameIncludes))
   );
 }
 
