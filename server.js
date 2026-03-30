@@ -578,7 +578,7 @@ const server = http.createServer((req, res) => {
       const normalizedClientName = normalizeTextLoose(row.nome);
       if (normalizedClientName === 'base sintese') {
         const pinnedWorkflow = {
-          id: 'KYxWBDGWNlIF63Xo',
+          id: 'gJk9yqd6sdMP7HiC',
           name: 'Gerador de resposta comercial // CRM NOVO // Garagem',
           active: true,
           updatedAt: null,
