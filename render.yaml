@@ -19,5 +19,3 @@ services:
         sync: false
       - key: CLICKUP_LIST_ID
         sync: false
-      - key: WORKFLOW_UPDATE_URL
-        sync: false

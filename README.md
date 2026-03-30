@@ -1,8 +1,25 @@
 # Infraestrutura - Grupo Sintese
 
-Deploy recomendado: Render (plano Free).
+Dashboard operacional para:
+- Monitoramento de erros n8n
+- Estrutura/infra de clientes
+- Manutenção de flags de cliente
+- Fluxo de duplicação de credenciais
+- Módulo interno de atualização de workflows
 
-## Rodar local
+## Estrutura do projeto
+
+- Front principal: `index.html`
+- Backend principal: `server.js`
+- Módulo interno de atualização: `workflow-update/`
+- Jobs agendados: `.github/workflows/scheduled-actions.yml`
+
+Documentação de contexto:
+- Arquitetura: `ARCHITECTURE.md`
+- Operação/deploy/troubleshooting: `RUNBOOK.md`
+- Handoff para outras IAs: `CONTEXT_FOR_AI.md`
+
+## Rodar localmente
 
 ```bash
 npm ci
@@ -11,37 +28,37 @@ npm start
 
 Acesse: `http://localhost:3456`
 
+## Variáveis de ambiente
+
+Obrigatórias:
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_KEY`
+- `DATABASE_URL`
+- `DATABASE_SERVICE_KEY`
+- `CLICKUP_TOKEN`
+- `CLICKUP_LIST_ID`
+
+O backend principal valida essas variáveis em runtime para rotas que dependem de banco.
+
 ## Deploy no Render
 
-1. Suba este projeto para um repositório no GitHub.
-2. No Render, clique em **New +** > **Blueprint** e conecte o repositório.
-3. O Render vai ler o `render.yaml` automaticamente.
-4. Configure as variáveis de ambiente:
-   - `SUPABASE_URL`
-   - `SUPABASE_SERVICE_KEY`
-   - `DATABASE_URL`
-   - `DATABASE_SERVICE_KEY`
-   - `CLICKUP_TOKEN`
-   - `CLICKUP_LIST_ID`
-5. Faça o deploy e use a URL pública gerada.
+1. Conecte o repositório.
+2. Faça deploy do Blueprint (`render.yaml`).
+3. Preencha as variáveis de ambiente obrigatórias.
+4. Faça deploy.
 
-## Observações
+URL de produção atual:
+- `https://n8n-error-dashboard.onrender.com`
 
-- O plano Free pode entrar em sleep após inatividade.
-- `report.json` e `sync-result.json` são dados de runtime e não devem ir para o Git.
+## Agendamento automático
 
-## Agendamento automático (sem abrir o site)
+Workflow GitHub:
+- `.github/workflows/scheduled-actions.yml`
 
-Este projeto usa GitHub Actions para disparar automaticamente:
-- `POST /api/refresh`
+Ele dispara:
 - `POST /api/sync`
+- `POST /api/refresh`
 
-Horários configurados:
+Horários:
 - 07:00 (America/Sao_Paulo), segunda a sexta
 - 16:00 (America/Sao_Paulo), segunda a sexta
-
-No cron UTC do GitHub isso equivale a:
-- `0 10 * * 1-5`
-- `0 19 * * 1-5`
-
-Arquivo: `.github/workflows/scheduled-actions.yml`
