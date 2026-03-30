@@ -323,6 +323,7 @@
     .script-shortcut-list { max-height:420px; overflow:auto; border:1px solid #1b1b1b; border-radius:8px; background:#050505; }
     .script-shortcut-item { display:block; width:100%; text-align:left; border:none; border-bottom:1px solid #141414; background:transparent; color:#c7c7c7; padding:8px 9px; font-size:12px; cursor:pointer; }
     .script-shortcut-item:hover { background:#101010; }
+    .script-shortcut-item.active { background:#121f33; color:#d9e8ff; border-left:2px solid #7aa2ff; padding-left:7px; }
     .script-shortcut-item:last-child { border-bottom:none; }
     .script-shortcut-item .kind { display:inline-block; font-size:10px; color:#7b7b7b; margin-right:6px; text-transform:uppercase; }
     .script-shortcut-empty { padding:10px; color:#666; font-size:12px; }
@@ -778,6 +779,7 @@
       shortcutSearch: '',
       shortcutSearchOffsets: [],
       shortcutSearchCursor: -1,
+      shortcutActiveOffset: -1,
     };
 
     function esc(s) {
@@ -1182,6 +1184,7 @@
       const textarea = document.getElementById('script-modal-textarea');
       if (!textarea) return;
       const safeOffset = Math.max(0, Math.min(Number(offset || 0), textarea.value.length));
+      scriptUpdateState.shortcutActiveOffset = safeOffset;
       textarea.focus();
       textarea.setSelectionRange(safeOffset, safeOffset);
       const before = textarea.value.slice(0, safeOffset);
@@ -1230,7 +1233,8 @@
       const headingHtml = headings.map(item => {
         const encodedOffset = Number(item.offset || 0);
         const tag = item.level === 'h2' ? '##' : '#';
-        return `<button type="button" class="script-shortcut-item" onclick="jumpToScriptOffset(${encodedOffset})">
+        const activeClass = scriptUpdateState.shortcutActiveOffset === encodedOffset ? ' active' : '';
+        return `<button type="button" class="script-shortcut-item${activeClass}" onclick="jumpToScriptOffset(${encodedOffset});renderScriptShortcuts();">
           <span class="kind">${tag}</span>${esc(item.label)}
         </button>`;
       }).join('');
@@ -1241,8 +1245,9 @@
           searchHtml = '<div class="script-shortcut-empty">Nenhuma ocorrência do texto pesquisado.</div>';
         } else {
           searchHtml = searchOffsets.map((offset, idx) => {
-            const active = idx === scriptUpdateState.shortcutSearchCursor ? ' style="background:#101928;"' : '';
-            return `<button type="button" class="script-shortcut-item" ${active} onclick="scriptUpdateState.shortcutSearchCursor=${idx};jumpToScriptOffset(${offset});renderScriptShortcuts();">
+            const isActive = scriptUpdateState.shortcutActiveOffset === offset || idx === scriptUpdateState.shortcutSearchCursor;
+            const activeClass = isActive ? ' active' : '';
+            return `<button type="button" class="script-shortcut-item${activeClass}" onclick="scriptUpdateState.shortcutSearchCursor=${idx};jumpToScriptOffset(${offset});renderScriptShortcuts();">
               <span class="kind">TXT</span>Ocorrência ${idx + 1}
             </button>`;
           }).join('');
@@ -1293,6 +1298,7 @@
       textarea.value = Object.prototype.hasOwnProperty.call(scriptUpdateState.drafts, current.itemId)
         ? scriptUpdateState.drafts[current.itemId]
         : current.originalValue;
+      scriptUpdateState.shortcutActiveOffset = -1;
       textarea.scrollTop = 0;
       textarea.scrollLeft = 0;
       renderScriptModalHighlight();
