@@ -488,12 +488,6 @@
       </div>
 
       <div id="script-modal-editor-step">
-        <div class="script-modal-toolbar">
-          <span id="script-modal-progress" class="kpi">Item 0/0</span>
-          <span id="script-modal-node" class="kpi">Node: —</span>
-          <span id="script-modal-agent" class="kpi">Agente: —</span>
-          <span id="script-modal-field" class="kpi">Campo: —</span>
-        </div>
         <div class="script-modal-editor-stack">
           <pre id="script-modal-highlight" class="script-modal-highlight"></pre>
           <textarea id="script-modal-textarea" class="script-modal-textarea" oninput="onScriptModalInput()" onscroll="onScriptModalScroll()" spellcheck="false"></textarea>
@@ -1119,17 +1113,9 @@
     function renderScriptModalEditor() {
       const current = getCurrentScriptQueueItem();
       const textarea = document.getElementById('script-modal-textarea');
-      const progress = document.getElementById('script-modal-progress');
-      const node = document.getElementById('script-modal-node');
-      const agent = document.getElementById('script-modal-agent');
-      const field = document.getElementById('script-modal-field');
       const meta = document.getElementById('script-modal-meta');
-      if (!current || !textarea || !progress || !node || !field || !meta || !agent) return;
+      if (!current || !textarea || !meta) return;
 
-      progress.textContent = `Item ${scriptUpdateState.queueIndex + 1}/${scriptUpdateState.queue.length}`;
-      node.textContent = `Node: ${current.nodeName || '-'}`;
-      agent.textContent = `Agente: ${current.agentNodeName || '-'}`;
-      field.textContent = `Campo: ${formatScriptTypeDisplayName(current.assignmentName || '-')}`;
       meta.textContent = `${formatScriptTypeDisplayName(current.scriptName || '-')} · ${current.nodeName || '-'}${current.agentNodeName ? ` → ${current.agentNodeName}` : ''}`;
       textarea.value = Object.prototype.hasOwnProperty.call(scriptUpdateState.drafts, current.itemId)
         ? scriptUpdateState.drafts[current.itemId]
