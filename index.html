@@ -380,6 +380,7 @@
 
       <div class="filters-line" style="margin-bottom:10px;">
         <input id="workflow-cleanup-search" class="search-input" style="margin:0; flex:1;" placeholder="Filtrar workflow por nome..." oninput="renderWorkflowCleanupList()">
+        <select id="workflow-cleanup-client-select" class="value-input" style="min-width:220px;"></select>
         <button class="copy-key-btn" onclick="selectFilteredWorkflowCleanup()">Selecionar filtrados</button>
         <button class="copy-key-btn" onclick="selectWorkflowCleanupByClientNames()">Selecionar por cliente</button>
         <button class="copy-key-btn" onclick="clearWorkflowCleanupSelection()">Limpar seleção</button>
@@ -1170,10 +1171,34 @@
       if (search) search.value = '';
       const list = document.getElementById('workflow-cleanup-list');
       if (list) list.innerHTML = '';
+      const clientSelect = document.getElementById('workflow-cleanup-client-select');
+      if (clientSelect) clientSelect.innerHTML = '';
       const total = document.getElementById('workflow-cleanup-total');
       if (total) total.textContent = '0';
       const selected = document.getElementById('workflow-cleanup-selected');
       if (selected) selected.textContent = '0';
+    }
+
+    function renderWorkflowCleanupClientOptions() {
+      const select = document.getElementById('workflow-cleanup-client-select');
+      if (!select) return;
+      const clientNames = Array.isArray(workflowCleanupContext?.clientNames)
+        ? [...new Set(workflowCleanupContext.clientNames.map(v => String(v || '').trim()).filter(Boolean))]
+        : [];
+
+      if (!clientNames.length) {
+        select.innerHTML = '<option value="">Sem clientes neste servidor</option>';
+        select.disabled = true;
+        return;
+      }
+
+      const options = clientNames
+        .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+        .map(name => `<option value="${encodeURIComponent(name)}">${esc(name)}</option>`)
+        .join('');
+      select.innerHTML = `<option value="">Selecione um cliente</option>${options}`;
+      select.disabled = false;
+      select.value = '';
     }
 
     function updateWorkflowCleanupCounters() {
@@ -1242,19 +1267,40 @@
     }
 
     function selectWorkflowCleanupByClientNames() {
-      const clientNames = Array.isArray(workflowCleanupContext?.clientNames) ? workflowCleanupContext.clientNames : [];
-      if (!clientNames.length) {
+      const select = document.getElementById('workflow-cleanup-client-select');
+      const encodedSelected = String(select?.value || '');
+      const selectedClientName = encodedSelected ? decodeURIComponent(encodedSelected) : '';
+      if (!selectedClientName) {
+        setWorkflowCleanupMessage('Selecione um cliente para filtrar os workflows.', 'error');
+        return;
+      }
+
+      if (!Array.isArray(workflowCleanupContext?.clientNames) || !workflowCleanupContext.clientNames.length) {
         setWorkflowCleanupMessage('Nenhum cliente encontrado para este servidor.', 'error');
         return;
       }
-      const normalizedClientNames = clientNames.map(normalizeLoose).filter(Boolean);
+
+      const normalizedClientName = normalizeLoose(selectedClientName);
+      if (!normalizedClientName) {
+        setWorkflowCleanupMessage('Cliente inválido para seleção.', 'error');
+        return;
+      }
+
+      let count = 0;
       for (const w of workflowCleanupList) {
         const workflowName = normalizeLoose(w?.name);
         if (!workflowName) continue;
-        const matches = normalizedClientNames.some(clientName => workflowName.includes(clientName));
-        if (matches) workflowCleanupSelected.add(String(w.id));
+        if (workflowName.includes(normalizedClientName)) {
+          workflowCleanupSelected.add(String(w.id));
+          count += 1;
+        }
       }
       renderWorkflowCleanupList();
+      if (count > 0) {
+        setWorkflowCleanupMessage(`Selecionados ${count} workflow(s) para o cliente "${selectedClientName}".`, 'ok');
+      } else {
+        setWorkflowCleanupMessage(`Nenhum workflow encontrado para o cliente "${selectedClientName}".`, 'error');
+      }
     }
 
     async function loadServerWorkflowsForCleanup() {
@@ -1518,6 +1564,7 @@
       document.getElementById('workflow-cleanup-server-label').textContent = serverHost || serverUrl || 'Servidor';
       document.getElementById('workflow-cleanup-search').value = '';
       document.getElementById('workflow-cleanup-modal').style.display = 'flex';
+      renderWorkflowCleanupClientOptions();
       renderWorkflowCleanupList();
       await loadServerWorkflowsForCleanup();
     }
