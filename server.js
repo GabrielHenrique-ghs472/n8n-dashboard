@@ -314,11 +314,33 @@ function applyScriptEditsToWorkflow(workflow, selectedScriptName, edits) {
 }
 
 function cleanWorkflowForN8nUpdate(workflow) {
+  const allowedSettingsKeys = new Set([
+    'saveManualExecutions',
+    'saveExecutionProgress',
+    'saveDataErrorExecution',
+    'saveDataSuccessExecution',
+    'executionTimeout',
+    'executionOrder',
+    'errorWorkflow',
+    'timezone',
+    'callerPolicy',
+  ]);
+
+  const rawSettings = workflow?.settings && typeof workflow.settings === 'object'
+    ? workflow.settings
+    : {};
+
+  const filteredSettings = {};
+  for (const [key, value] of Object.entries(rawSettings)) {
+    if (!allowedSettingsKeys.has(key)) continue;
+    filteredSettings[key] = value;
+  }
+
   const clean = {
     name: workflow?.name,
     nodes: workflow?.nodes,
     connections: workflow?.connections,
-    settings: workflow?.settings ?? {},
+    settings: filteredSettings,
   };
   if (workflow?.staticData !== undefined) clean.staticData = workflow.staticData;
   return clean;
@@ -881,8 +903,13 @@ const server = http.createServer((req, res) => {
         throw errorSave;
       }
     }).catch(err => {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: err.message }));
+      const message = String(err?.message || 'Erro ao salvar alterações');
+      const statusCode =
+        /HTTP 4\d\d/i.test(message) ? 400 :
+        /HTTP 5\d\d/i.test(message) ? 502 :
+        500;
+      res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: message }));
     }).finally(() => {
       scriptUpdateSaveLocks.delete(lockKey);
     });
